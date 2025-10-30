@@ -5,6 +5,8 @@ Data and Python code repository to reproduce the results in chapter 4 and 5 of t
 generative neural networks" by Eliane Maalouf (University of Neuchâtel, Switzerland).
 
 # Contents
+- `01_geophysics_inverse_problem_docs/`: Contains the plots from the thesis chapter 4 and detailed results.
+- `fastabc_inversion/`: Python package containing the code to run the FastABC inversion experiments.
 
 # Experiments naming convention and reproducibility
 
