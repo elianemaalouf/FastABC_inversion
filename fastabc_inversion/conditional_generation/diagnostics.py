@@ -7,6 +7,7 @@ import torch
 import os
 import numpy as np
 
+from fastabc_inversion.conditional_generation.cifar10.diffusion_cifar import data_loader
 from fastabc_inversion.utils.utilities import compute_stats
 from fastabc_inversion.utils.evaluation.mmd import MMD2 as mmd, two_sample_mmd_test
 from fastabc_inversion.utils.torch_distances import rmse_torch
@@ -359,7 +360,7 @@ class Diagnostics:
         if which_variable not in ['x', 'y', 'z']:
             raise ValueError("which_variable must be one of 'x', 'y', 'z'.")
 
-        max_sample_size = max_sample_size
+        #max_sample_size = max_sample_size
 
         if which_variable in ['x', 'y']:
             large_sample_size = min(max_sample_size, self.experiment.train_size)
@@ -407,9 +408,28 @@ class Diagnostics:
 
         else: # which_variable == 'z'
             large_sample_size = min(max_sample_size, self.experiment.val_size)
+            random_indices = torch.randperm(self.experiment.val_size)[:large_sample_size]
+
+            # get large sample from training data
+            data_loader = DataLoader(
+                Subset(self.experiment.train_loader.dataset, random_indices),
+                batch_size=300,
+                shuffle=False,
+                num_workers=0
+            )
+            all_train_samples = [data_loader.dataset[i] for i in range(len(data_loader.dataset))]
+            # compute latent codes for all samples
+            latent_codes_list = []
+            for sample in all_train_samples:
+                image = sample[0].to(self.experiment.device).unsqueeze(0)
+                label = sample[1].to(self.experiment.device).unsqueeze(0)
+                with torch.no_grad():
+                    latent_code = self.experiment.netD(image, label)
+                latent_codes_list.append(latent_code.cpu())
+            all_train_latent_codes = torch.cat(latent_codes_list, dim=0).numpy()
+            del all_train_samples, latent_codes_list, latent_code
 
             # get large sample from validation data
-            random_indices = torch.randperm(self.experiment.val_size)[:large_sample_size]
             data_loader = DataLoader(
                 Subset(self.experiment.val_loader.dataset, random_indices),
                 batch_size=300,
@@ -434,7 +454,7 @@ class Diagnostics:
                 torch.tensor(self.experiment.latent_dist_params_list[1], dtype=torch.float32),
             ).sample((large_sample_size, self.experiment.latent_dim)).numpy()
 
-            all_data = np.vstack((all_val_latent_codes, large_latent_vector))
+            all_data = np.vstack((all_train_latent_codes, all_val_latent_codes, large_latent_vector))
             median_z = estimate_median_pairwise_dists(all_data, sample_ratio=1.0, chunk_size=300)
             self.mmd_est_params['z'] = 1/median_z
             del all_data, all_val_latent_codes, large_latent_vector

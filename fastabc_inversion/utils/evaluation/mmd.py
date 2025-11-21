@@ -1,5 +1,5 @@
 """
-Based on https://github.com/emanuele/kernel_two_sample_test/blob/master/kernel_two_sample_test.py
+Adapted from https://github.com/emanuele/kernel_two_sample_test/blob/master/kernel_two_sample_test.py
 Reference : Gretton, A., Borgwardt, K. M., Rasch, M. J., Schölkopf, B., & Smola, A. (2012). A kernel two-sample test.
 Adapted by Eliane Maalouf.
 """
