@@ -222,9 +222,9 @@ if __name__ == "__main__":
             inference_params = {
                 "N": 500,
                 "p0": 0.1,
-                "epsilon_vec": [0.0001],# [0.01],#
-                "norm_fct": 'kl_divergence',  # 'l2' (SSE) or 'l1' (SAE) or 'cross_entropy' or 'kl_divergence', 'slant', 'thickness', 'length'
-                "max_it": 10, #20, #10,  # 30, # 50,
+                "epsilon_vec": [0.0001],#[0.01],#
+                "norm_fct": 'emd',  # 'l2' (SSE) or 'l1' (SAE) or 'cross_entropy' or 'kl_divergence', 'emd', 'slant', 'thickness', 'length'
+                "max_it": 20, #20, #10,  # 30, # 50,
                 "return_full_results":True,
                 "sus_runs":1,
             }
@@ -233,7 +233,7 @@ if __name__ == "__main__":
             #observation_vec = [
     #[0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.55],  # slight perturbation to onehot vector '9'
     #[0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.8],            # confused with 0 and 8
-    #[0.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3],            # highly uncertain
+    #[0.05, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2],            # highly uncertain
     #[0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0, 0.0, 0.7],          # confused with 0 and 4
     #[0.05, 0.05, 0.0, 0.05, 0.1, 0.0, 0.0, 0.0, 0.05, 0.7]         # moderate uncertainty
 #]  # perturbed onehot vectors '9'
@@ -485,6 +485,7 @@ if __name__ == "__main__":
                 inference.read_sus_inference_results_from_files(mnist_exp, observation_vec)
 
             for obs in observation_vec:
+                obs_inference_dir = f"{mnist_exp.inference_dir}/label_{obs}"
                 dict_key = tuple(obs) if isinstance(obs, list) else obs
                 eps = inference_params['epsilon_vec'][0] # assuming one epsilon level TODO: generalize
                 obs_all_latent_samples = mnist_exp.all_obs_inference_results[dict_key][eps]['samples_per_thresh'][0] # assuming sus_runs=1 TODO: generalize
@@ -522,9 +523,21 @@ if __name__ == "__main__":
                     indices = torch.randperm(inverted_x.size(0))[:num_samples_to_plot]
 
                     # at each intermediate level
-                    """
-                    # 1.randomly select num_samples_to_plot to plot from each observation set
 
+                    # 1. assess MMD between generated and test set samples
+                    # run only when morphological function is not used and only for noiseless observations (when obs is int)
+                    if inference_params['norm_fct'] not in morphological_fn:
+                        run_refs = True if thresh_idx == 0 else False
+                        if isinstance(obs, int):
+                            obs_onehot = mnist_exp.label_transform(obs)
+                            diag.mmd_with_testset(mnist_exp, inverted_x, obs_onehot,
+                                                  makes_refs = run_refs, storing_directory = obs_inference_dir,
+                                                  filename_ref = thresh_idx)
+                        else:
+                            print("MMD with test set not computed for uncertain observations.")
+
+                    # 2.randomly select num_samples_to_plot to plot from each observation set
+                    """
                     images_to_plot = inverted_x[indices, :, :, :].squeeze().numpy()
                     labels_to_plot = inverted_y_label[indices].numpy()
 
@@ -533,8 +546,8 @@ if __name__ == "__main__":
                     plot.plot_samples_grid(images=images_to_plot, labels=labels_to_plot,
                                            num_samples=num_samples_to_plot, save_location=save_fig_path)
 
-                    """
-                    # 2.
+
+                    # 3.
                     if inference_params['norm_fct'] in morphological_fn:
                         # measure morphological transformation of generated samples
 
@@ -561,7 +574,7 @@ if __name__ == "__main__":
                         all_values.extend(inverted_y_label.tolist())
 
                 # Save concordance results to text file
-                concordance_save_path = f"{mnist_exp.inference_dir}/label_{obs}/concordance_per_threshold.txt"
+                concordance_save_path = f"{obs_inference_dir}/concordance_per_threshold.txt"
                 with open(concordance_save_path, 'w') as f:
                     f.write("threshold\tconcordance\n")
                     for threshold, concordance in concordance_values.items():
@@ -585,7 +598,7 @@ if __name__ == "__main__":
                                 'length': [14, 24, 34, 44, 54, 64, 74, 84, 94, 100],}
                 yticks = range(10) if inference_params['norm_fct'] not in morphological_fn else morpho_ticks.get(inference_params['norm_fct'], None)
 
-                plot_save_path = f"{mnist_exp.inference_dir}/label_{obs}/all_thresholds_summaries_boxplots.pdf"
+                plot_save_path = f"{obs_inference_dir}/all_thresholds_summaries_boxplots.pdf"
                 if inference_params['norm_fct'] in morphological_fn:
                     plot.plot_boxplot_with_stripplot(df, value_labels= legend, yticks=yticks, reverse_labels=True,
                                         title=f"Target = {obs} - Plotted {num_samples_to_plot} from {inference_params['N']}",
@@ -597,7 +610,7 @@ if __name__ == "__main__":
                         title=f"Target = {obs}",
                         save_location=plot_save_path
                     )
-
+                """
 
 
 

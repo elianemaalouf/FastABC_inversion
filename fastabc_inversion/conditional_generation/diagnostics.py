@@ -5,9 +5,9 @@ Base class for diagnostics on the trained models and SuS inference for condition
 from torch.utils.data import Subset, DataLoader
 import torch
 import os
+import pingouin as pg
 import numpy as np
 
-from fastabc_inversion.conditional_generation.cifar10.diffusion_cifar import data_loader
 from fastabc_inversion.utils.utilities import compute_stats
 from fastabc_inversion.utils.evaluation.mmd import MMD2 as mmd, two_sample_mmd_test
 from fastabc_inversion.utils.torch_distances import rmse_torch
@@ -61,7 +61,7 @@ class Diagnostics:
                                            #"compute_only_with_rand_proj": False, "rand_proj_dims":30}, # TODO : delete these parameters
             "recons_stats": {"build_y_stats": True, "make_plots": True},
             "resim_stats": {"make_plots": True},
-            "latent_dist": {"make_plots": True, "n_neighbors": 5, "min_dist": 0.1, "fit_prior_only":False, "denseMAP":True,
+            "latent_dist": {"make_plots": True, "n_neighbors": 5, "min_dist": 0.1, "denseMAP":True,
                             "mmd_params": self.mmd_params, "two_sample_test_params": self.two_sample_test_params,
                             "test_repeats": 100, "test_sample_size": 300},
             "orig_data_embed_viz":{"fit_prior_only":False, "denseMAP":True, "n_neighbors": 15, "min_dist": 0.1},
@@ -347,6 +347,17 @@ class Diagnostics:
 
         self.hyperparams_string, self.hpyperparams_headers = make_logging_strings(hyperparams_to_log)
 
+    def estimate_mmd_kernel_gamma(self, data):
+        """
+        Estimate MMD kernel parameter using median heuristic on the provided data.
+        :param data: data to use for estimation.
+        :return: estimated MMD kernel parameter gamma.
+        """
+        from fastabc_inversion.utils.evaluation.mmd import estimate_median_pairwise_dists
+
+        sq_median = estimate_median_pairwise_dists(data, sample_ratio=1.0, chunk_size=300)  # squared euclidean
+        return 1 / sq_median
+
     def estimate_mmd_params(self, which_variable, max_sample_size = 10000):
         """
         Estimate MMD kernel parameter using median heuristic.
@@ -569,6 +580,167 @@ class Diagnostics:
 
         return (f"{mean}, {std}, {median},([{q25},{q75}],[{q025},{q975}])")
 
+    def make_priorvsgen_dists_distances_stats_claude(self, mmd_params=None, two_sample_test_params=None, sample_size=300):
+        """
+        Generates and computes statistical distances between prior (training) and generated data distributions.
+        This function performs Maximum Mean Discrepancy (MMD) two-sample tests on the given data
+        to evaluate the similarity between training and generated data distributions. It calculates
+        summary statistics for MMD distances and p-values from the two-sample tests for input (x)
+        data samples.
+
+        :param mmd_params: Dictionary containing parameters for the MMD computation.
+        :param two_sample_test_params: Dictionary containing parameters for two-sample testing.
+        :param sample_size: The size of the sample subsets used for computations.
+        :return: dictionary containing the results of the statistics to log.
+        """
+        print("Making prior vs generated distributions distance statistics...")
+        precision = self.round_digits
+
+        import copy
+        from torch.utils.data import Subset, DataLoader
+
+        mmd_params_x = copy.deepcopy(mmd_params)
+        two_sample_test_params_x = copy.deepcopy(two_sample_test_params)
+
+        # define large sample
+        max_sample_size = 10000
+        real_train_size = self.experiment.train_size
+        train_size = min(real_train_size, max_sample_size)
+
+        # Randomly select indices from the training set
+        random_indices = torch.randperm(real_train_size)[:train_size]
+
+        training_data_loader = DataLoader(
+            Subset(self.experiment.train_loader.dataset, random_indices),
+            batch_size=300,
+            shuffle=False,
+            num_workers=0
+        )
+
+        all_train_samples = []
+        for batch in training_data_loader:
+            all_train_samples.append(batch[0])
+
+        train_x = torch.cat(all_train_samples, dim=0).view(-1, self.experiment.dim_x).numpy()
+        del all_train_samples
+
+        # generate from jGNN
+        z_dist = self.experiment.latent_dist
+        z_dist_params = self.experiment.latent_dist_params_list
+
+        latent_vector = (
+            z_dist(
+                torch.tensor(z_dist_params[0], dtype=torch.float32),
+                torch.tensor(z_dist_params[1], dtype=torch.float32),
+            )
+            .sample((train_size, self.experiment.latent_dim))
+            .to(self.experiment.device)
+        )
+
+        with torch.no_grad():
+            generated_data = self.experiment.netG(latent_vector)
+            generated_x = generated_data[0].cpu()
+            del generated_data
+
+        generated_x = generated_x.view(-1, self.experiment.dim_x).numpy()
+
+        # for X
+        mmd_x_dists = []
+        mmd_x_refs = []
+        two_sample_tests_x_pvalues = []
+
+        all_x = np.vstack((train_x, generated_x))
+        gamma_x = self.estimate_mmd_kernel_gamma(all_x)
+        mmd_params_x['kernel_params']['gamma'] = gamma_x
+        two_sample_test_params_x['kernel_params']['gamma'] = gamma_x
+        self.mmd_est_params['x'] = gamma_x
+        print(f"Using estimated MMD x kernel parameter gamma: {gamma_x}")
+        del all_x
+
+        # compute MMD and two-sample tests on data subsets of size sample_size
+        num_repeats = train_size // sample_size
+        for i in range(num_repeats):
+            idx_start_i = i * sample_size
+            idx_end_i = (i + 1) * sample_size
+
+            train_x_sample = train_x[idx_start_i:idx_end_i, :]
+
+            print(f"Repeat {i + 1}/{num_repeats}...")
+            for j in range(num_repeats):
+                # print(f"  Sub-repeat {j + 1}/{num_repeats}...")
+
+                idx_start_j = j * sample_size
+                idx_end_j = (j + 1) * sample_size
+
+                # print(f"    Computing MMD and two-sample test for x data...gammas: "
+                #      f"{mmd_params_x['kernel_params']['gamma']}, {two_sample_test_params_x['kernel_params']['gamma']}")
+                generated_x_sample = generated_x[idx_start_j:idx_end_j, :]
+
+                mmd_x_dists.append(mmd(train_x_sample, generated_x_sample, **mmd_params_x)[0])
+                two_sample_tests_x_pvalues.append(
+                    two_sample_mmd_test(train_x_sample, generated_x_sample, **two_sample_test_params_x)[1])
+
+                # Compute reference MMD between different training chunks
+                if j != i:
+                    train_x_sample_2 = train_x[idx_start_j:idx_end_j, :]
+                    mmd_x_refs.append(mmd(train_x_sample, train_x_sample_2, **mmd_params_x)[0])
+
+        mmd_x_dists = np.array(mmd_x_dists)
+        mmd_x_refs = np.array(mmd_x_refs)
+        two_sample_tests_x_pvalues = np.array(two_sample_tests_x_pvalues)
+
+        self.results_vecs["mmd_x_dists"] = mmd_x_dists
+        self.results_vecs["mmd_x_refs"] = mmd_x_refs
+        self.results_vecs["two_sample_tests_x_pvalues"] = two_sample_tests_x_pvalues
+
+        # compute statistics
+        mmd_x_dists_stats = self.compute_array_stats(mmd_x_dists)
+        mmd_x_refs_stats = self.compute_array_stats(mmd_x_refs)
+
+        # combined p_values
+        from scipy.stats import chi2
+        total_test_repeats = len(two_sample_tests_x_pvalues)
+
+        combined_stat_x = -2 * np.sum(np.log(two_sample_tests_x_pvalues))
+        combined_p_value_x = 1 - chi2.cdf(combined_stat_x, 2 * total_test_repeats)
+
+        # prepare data for logging
+        write_combined_pvalue_two_sample_x = f"{combined_p_value_x:.{precision}f}" \
+            if combined_p_value_x is not None else None
+        write_combined_pvalue_two_sample_x_txt = f"Combined p-value from two-sample MMD {total_test_repeats} test repetitions on x data (train vs gen)- sample size = {sample_size}:"
+        write_header_combined_pvalue_two_sample_x = "combined_pvalue_two_sample_x"
+
+        write_data_mmd_x = self.make_array_stats_string(mmd_x_dists_stats, precision)
+        write_data_mmd_x_txt = f"MMD distances between training and generated x data (est. with sample size={sample_size}*{len(mmd_x_dists)}):"
+        write_header_mmd_x = "mmd_x_mean, std, mmd_x_median, [(mmd_x_q25, mmd_x_q75), (mmd_x_q025, mmd_x_q975)]"
+
+        write_data_mmd_x_ref = self.make_array_stats_string(mmd_x_refs_stats, precision)
+        write_data_mmd_x_ref_txt = f"Ref-MMD distances between two training x data samples (est. with sample size={sample_size}*{len(mmd_x_refs)}):"
+        write_header_mmd_x_ref = f"mmd_x_ref_mean, mmd_x_ref_std, mmd_x_ref_median, [(mmd_x_ref_q25, mmd_x_ref_q75), (mmd_x_ref_q025, mmd_x_ref_q975)]"
+
+        # pickle X mmd restuls vecs
+        import pickle
+        with open(self.logging_dir + "/prior_vs_gen_dists_mmd_results_vecs.pkl", "wb") as f:
+            pickle.dump(self.results_vecs, f)
+
+        # store estimated gamma parameters on disk in .txt files
+        with open(self.logging_dir + f"/mmd_x_kernel_param.txt", "w") as f:
+            f.write(f"estimated MMD x kernel parameter gamma : {str(self.mmd_est_params['x'])}")
+
+        return {
+            "data": {
+                "write_data_mmd_x": (write_data_mmd_x, write_data_mmd_x_txt),
+                "write_combined_pvalue_two_sample_x": (write_combined_pvalue_two_sample_x,
+                                                       write_combined_pvalue_two_sample_x_txt),
+                "write_data_mmd_x_ref": (write_data_mmd_x_ref, write_data_mmd_x_ref_txt),
+            },
+            "headers": {
+                "write_header_mmd_x": write_header_mmd_x,
+                "write_header_combined_pvalue_two_sample_x": write_header_combined_pvalue_two_sample_x,
+                "write_header_mmd_x_ref": write_header_mmd_x_ref,
+            }
+        }
+
     def make_priorvsgen_dists_distances_stats(self, mmd_params=None, sample_size=300,
                                               repeats=100, two_sample_test_params=None):
         """
@@ -644,7 +816,7 @@ class Diagnostics:
         if two_samples_test_p_values is not None:
             combined_stat = -2 * np.sum(np.log(two_samples_test_p_values))
             from scipy.stats import chi2
-            combined_p_value = 1 - chi2.cdf(combined_stat, 2 * repeats)
+            combined_p_value = 1 - chi2.cdf(combined_stat, 2 * len(two_samples_test_p_values))
 
             rejection_proportion = np.mean(np.array(two_samples_test_rejections))
         else:
@@ -1125,7 +1297,254 @@ class Diagnostics:
             }
         }
 
-    def inspect_latent_distribution(self, make_plots = True, n_neighbors = 100,  min_dist = 0.3, fit_prior_only = False, denseMAP = False,
+    def inspect_latent_distribution(self, make_plots = True, n_neighbors = 100,  min_dist = 0.3,
+                                    mmd_params=None, two_sample_test_params = None,
+                                    test_sample_size = 300, denseMAP = True):
+        """
+        Inspect latent space distribution.
+        :param make_plots: if True, make plots of the latent distribution inspections
+        :param n_neighbors: number of neighbors to consider for UMAP embedding
+        :param min_dist: minimum distance between points in UMAP embedding
+        :param two_sample_test_params: parameters for the two sample MMD test
+        :param test_sample_size: sample size for the two sample MMD test
+        :return: dictionary of statistics formatted to be logged by write_results()
+        """
+        import copy
+
+        print("Inspecting latent space distribution...")
+
+        precision = self.round_digits
+
+        mmd_params_z = copy.deepcopy(mmd_params)
+        two_sample_test_params_z = copy.deepcopy(two_sample_test_params)
+
+        z_dist = self.experiment.latent_dist
+        z_dist_params = self.experiment.latent_dist_params_list
+        latent_dim = self.experiment.latent_dim
+
+        sample_size = test_sample_size
+
+        self.latent_prior_mean = np.mean(self.latent_vector.numpy(), axis=0)
+        self.latent_train_codes_mean = np.mean(self.latent_train_codes.numpy(), axis=0)
+        self.latent_val_codes_mean = np.mean(self.latent_val_codes.numpy(), axis=0)
+
+        mean_diff_prior_train_norm= np.linalg.norm(self.latent_prior_mean - self.latent_train_codes_mean)/(latent_dim**0.5) # norm of difference
+        mean_diff_prior_val_norm = np.linalg.norm(self.latent_prior_mean - self.latent_val_codes_mean)/(latent_dim**0.5) # norm of difference
+
+        self.latent_prior_covm = np.cov(self.latent_vector.numpy(), rowvar=False)
+        self.latent_train_codes_covm = np.cov(self.latent_train_codes.numpy(), rowvar=False)
+        self.latent_val_codes_covm = np.cov(self.latent_val_codes.numpy(), rowvar=False)
+
+        self.covm_diff_prior_train = np.abs(self.latent_prior_covm - self.latent_train_codes_covm)
+        self.covm_diff_prior_val = np.abs(self.latent_prior_covm - self.latent_val_codes_covm)
+
+        covm_diff_prior_train_norm = np.linalg.norm(self.covm_diff_prior_train , ord='fro')/latent_dim # frobenius norm of difference matrix
+        covm_diff_prior_val_norm = np.linalg.norm(self.covm_diff_prior_val, ord='fro')/latent_dim # frobenius norm of difference matrix
+
+        # multivariate normality test
+        if self.experiment.latent_dist_name == "standardnormal" or self.experiment.latent_dist_name == "normal":
+            # test multivariate normality (Henze-Zirkler test)
+            latent_train_mvn_test = pg.multivariate_normality(self.latent_train_codes, alpha=0.05)
+            latent_val_mvn_test = pg.multivariate_normality(self.latent_val_codes, alpha=0.05)
+        else:
+            latent_train_mvn_test = latent_val_mvn_test = None
+
+        # two sample MMD test
+        if two_sample_test_params is not None:
+            latent_train_mmd_two_sample_tests_vec = []
+            latent_val_mmd_two_sample_tests_vec = []
+            latent_train_mmd_two_sample_tests_pvalues = []
+            latent_val_mmd_two_sample_tests_pvalues = []
+
+            latent_train_mmd_values_vec = []
+            latent_val_mmd_values_vec = []
+
+            latent_mmd_ref = []
+
+            all_data = np.vstack((self.latent_train_codes, self.latent_val_codes, self.latent_vector))
+            gamma_z = self.estimate_mmd_kernel_gamma(all_data)
+            mmd_params_z['kernel_params']['gamma'] = gamma_z
+            two_sample_test_params_z['kernel_params']['gamma'] = gamma_z
+            self.mmd_est_params['z'] = gamma_z
+            print(f"Estimated MMD kernel gamma for latent space: {gamma_z}")
+            del all_data
+
+            num_repeats = self.latent_val_codes.shape[0] // sample_size
+            for i in range(num_repeats):
+                idx_start_i = i * sample_size
+                idx_end_i = (i + 1) * sample_size
+
+                latent_vector = self.latent_vector[idx_start_i:idx_end_i, :]
+
+                print(f"Repeat {i + 1}/{num_repeats}...")
+                for j in range(num_repeats):
+                    print(f"  Sub-repeat {j + 1}/{num_repeats}...")
+
+                    idx_start_j = j * sample_size
+                    idx_end_j = (j + 1) * sample_size
+
+                    latent_train_codes = self.latent_train_codes[idx_start_j:idx_end_j, :]
+                    latent_val_codes = self.latent_val_codes[idx_start_j:idx_end_j, :]
+
+                    train_test = two_sample_mmd_test(latent_vector, latent_train_codes,
+                                                     **two_sample_test_params_z)
+                    val_test = two_sample_mmd_test(latent_vector, latent_val_codes,
+                                                   **two_sample_test_params_z)
+
+                    latent_train_mmd_two_sample_tests_vec.append(train_test[2])
+                    latent_train_mmd_two_sample_tests_pvalues.append(train_test[1])
+                    latent_val_mmd_two_sample_tests_vec.append(val_test[2])
+                    latent_val_mmd_two_sample_tests_pvalues.append(val_test[1])
+
+                    latent_train_mmd_values_vec.append(
+                        mmd(latent_vector, latent_train_codes, **mmd_params_z)[0])
+                    latent_val_mmd_values_vec.append(mmd(latent_vector, latent_val_codes, **mmd_params_z)[0])
+
+                    if j != i:
+                        latent_vector_2 = self.latent_vector[idx_start_j:idx_end_j, :]
+
+                        latent_mmd_ref.append(mmd(latent_vector, latent_vector_2, **mmd_params_z)[0])
+
+            latent_train_mmd_two_sample_tests_vec = np.array(latent_train_mmd_two_sample_tests_vec)
+            latent_val_mmd_two_sample_tests_vec = np.array(latent_val_mmd_two_sample_tests_vec)
+            latent_train_mmd_two_sample_tests_pvalues = np.array(latent_train_mmd_two_sample_tests_pvalues)
+            latent_val_mmd_two_sample_tests_pvalues = np.array(latent_val_mmd_two_sample_tests_pvalues)
+            latent_train_mmd_values_vec = np.array(latent_train_mmd_values_vec)
+            latent_val_mmd_values_vec = np.array(latent_val_mmd_values_vec)
+            latent_mmd_ref = np.array(latent_mmd_ref)
+        else:
+            latent_train_mmd_two_sample_tests_vec = latent_val_mmd_two_sample_tests_vec = \
+                latent_train_mmd_values_vec = latent_val_mmd_values_vec = latent_mmd_ref = latent_train_mmd_two_sample_tests_pvalues = \
+                latent_val_mmd_two_sample_tests_pvalues = None
+
+        self.results_vecs["latent_train_mmd_two_sample_tests"] = latent_train_mmd_two_sample_tests_vec
+        self.results_vecs["latent_train_mmd_two_sample_tests_pvalues"] = latent_train_mmd_two_sample_tests_pvalues
+        self.results_vecs["latent_val_mmd_two_sample_tests"] = latent_val_mmd_two_sample_tests_vec
+        self.results_vecs["latent_val_mmd_two_sample_tests_pvalues"] = latent_val_mmd_two_sample_tests_pvalues
+        self.results_vecs["latent_train_mmd_values"] = latent_train_mmd_values_vec
+        self.results_vecs["latent_val_mmd_values"] = latent_val_mmd_values_vec
+
+        write_data_train_mvn_test = str(latent_train_mvn_test) if latent_train_mvn_test is not None else 'N/A' # ['hz', 'pval', 'normal'?]
+        write_data_train_mvn_test_txt = "'Multivariate normal test - training latent codes : "
+        write_header_train_mvn_test = "latent_train_mvn_test"
+
+        write_data_val_mvn_test = str(latent_val_mvn_test) if latent_val_mvn_test is not None else 'N/A' # ['hz', 'pval', 'normal'?]
+        write_data_val_mvn_test_txt = "'Multivariate normal test - validation latent codes : "
+        write_header_val_mvn_test = "latent_val_mvn_test"
+
+        if two_sample_test_params is not None: # if testing was done
+            from scipy.stats import chi2
+            total_test_repeats = len(latent_val_mmd_two_sample_tests_pvalues)
+            # compute proportion of H0 rejections
+            prop_latent_train_mmd_two_sample_test = np.mean(latent_train_mmd_two_sample_tests_vec)
+            prop_latent_val_mmd_two_sample_test = np.mean(latent_val_mmd_two_sample_tests_vec)
+
+            # combine p_values
+            combined_stat_train = -2 * np.sum(np.log(latent_train_mmd_two_sample_tests_pvalues))
+            combined_p_value_train = 1 - chi2.cdf(combined_stat_train, 2 * total_test_repeats)
+
+            combined_stat_val = -2 * np.sum(np.log(latent_val_mmd_two_sample_tests_pvalues))
+            combined_p_value_val = 1 - chi2.cdf(combined_stat_val, 2 * total_test_repeats)
+        else:
+            prop_latent_train_mmd_two_sample_test = prop_latent_val_mmd_two_sample_test =combined_p_value_train = \
+                combined_p_value_val = None
+
+        write_prop_train_mmd_two_sample_test = f"{prop_latent_train_mmd_two_sample_test:.{precision}f}" \
+            if prop_latent_train_mmd_two_sample_test is not None else None
+        write_prop_train_mmd_two_sample_test_txt = f"Proportion of H0 rejections (samples from same dist.) in MMD {total_test_repeats} test repetitions  - training latent codes: "
+        write_header_prop_train_mmd_two_sample_test = "prop_reject_latent_train_two_sample_test"
+
+        write_prop_val_mmd_two_sample_test = f"{prop_latent_val_mmd_two_sample_test:.{precision}f}" \
+            if prop_latent_val_mmd_two_sample_test is not None else None
+        write_prop_val_mmd_two_sample_test_txt = f"Proportion of H0 rejections (samples from same dist.) MMD {total_test_repeats} test repetitions  - validation latent codes: "
+        write_header_prop_val_mmd_two_sample_test = "prop_reject_latent_val_two_sample_test"
+
+        write_combined_pvalue_train_mmd_two_sample_test = f"{combined_p_value_train:.{precision}f}" \
+            if combined_p_value_train is not None else None
+        write_combined_pvalue_train_mmd_two_sample_test_txt = f"Combined p-value from two sample MMD {total_test_repeats} test repetitions - training latent codes: "
+        write_header_combined_pvalue_train_mmd_two_sample_test = "combined_pvalue_latent_train_two_sample_test"
+
+        write_combined_pvalue_val_mmd_two_sample_test = f"{combined_p_value_val:.{precision}f}" \
+            if combined_p_value_val is not None else None
+        write_combined_pvalue_val_mmd_two_sample_test_txt = f"Combined p-value from two sample MMD {total_test_repeats} test repetitions - validation latent codes: "
+        write_header_combined_pvalue_val_mmd_two_sample_test = "combined_pvalue_latent_val_two_sample_test"
+
+        latent_train_mmd_values_stats = self.compute_array_stats(latent_train_mmd_values_vec)
+        write_data_train_mmd_values = self.make_array_stats_string(latent_train_mmd_values_stats, precision)
+        write_data_train_mmd_values_txt = f"MMD values - training latent codes from {total_test_repeats}*{sample_size}: "
+        write_header_train_mmd_values = ("mean_latent_train_mmd_values, std_latent_train_mmd_values, median_latent_train_mmd_values,"
+                                            "[(q25_latent_train_mmd_values,q75_latent_train_mmd_values),"
+                                            "(q025_latent_train_mmd_values,q975_latent_train_mmd_values)]")
+
+        latent_val_mmd_values_stats = self.compute_array_stats(latent_val_mmd_values_vec)
+        write_data_val_mmd_values = self.make_array_stats_string(latent_val_mmd_values_stats, precision)
+        write_data_val_mmd_values_txt = f"MMD values - validation latent codes from {total_test_repeats}*{sample_size}:: "
+        write_header_val_mmd_values = ("mean_latent_val_mmd_values, std_latent_val_mmd_values, median_latent_val_mmd_values,"
+                                        "[(q25_latent_val_mmd_values,q75_latent_val_mmd_values),"
+                                        "(q025_latent_val_mmd_values,q975_latent_val_mmd_values)]")
+
+        latent_mmd_ref_values_stats = self.compute_array_stats(latent_mmd_ref)
+        write_data_mmd_ref_values = self.make_array_stats_string(latent_mmd_ref_values_stats, precision)
+        write_data_mmd_ref_values_txt = f"Ref - MMD values latent space from {total_test_repeats}*{sample_size}: "
+        write_header_mmd_ref_values = ("mean_mmd_ref_values, std_mmd_ref_values, ,median_mmd_ref_values,"
+                                        "[(q25_mmd_ref_values,q75_mmd_ref_values),"
+                                        "(q025_mmd_ref_values,q975_mmd_ref_values)]")
+
+        write_mean_diff_prior_train_norm = f"{mean_diff_prior_train_norm:.{precision}f}"
+        write_mean_diff_prior_train_norm_txt = "Norm of difference between prior and training latent codes means vectors:"
+        write_header_mean_diff_prior_train_norm = "mean_diff_latent_prior_train_norm"
+
+        write_mean_diff_prior_val_norm = f"{mean_diff_prior_val_norm:.{precision}f}"
+        write_mean_diff_prior_val_norm_txt = "Norm of difference between prior and validation latent codes means vectors:"
+        write_header_mean_diff_prior_val_norm = "mean_diff_latent_prior_val_norm"
+
+        write_covm_diff_prior_train_norm = f"{covm_diff_prior_train_norm:.{precision}f}"
+        write_covm_diff_prior_train_norm_txt = "Frobinus norm of difference between prior and training latent codes covariance matrices:"
+        write_header_covm_diff_prior_train_norm = "covm_diff_latent_prior_train_norm"
+
+        write_covm_diff_prior_val_norm = f"{covm_diff_prior_val_norm:.{precision}f}"
+        write_covm_diff_prior_val_norm_txt = "Frobinus norm of difference between prior and validation latent codes covariance matrices:"
+        write_header_covm_diff_prior_val_norm = "covm_diff_latent_prior_val_norm"
+
+        if make_plots:
+            self.plot_latent_cov_matrices()
+            self.plot_latent_histograms()
+            self.plot_latent_umap_tsne_scatters(n_neighbors=n_neighbors, min_dist=min_dist, denseMAP=denseMAP)
+
+        return {
+            "data":{
+                "write_data_train_mvn_test": (write_data_train_mvn_test, write_data_train_mvn_test_txt),
+                "write_data_val_mvn_test": (write_data_val_mvn_test, write_data_val_mvn_test_txt),
+                "write_prop_train_mmd_two_sample_test": (write_prop_train_mmd_two_sample_test, write_prop_train_mmd_two_sample_test_txt),
+                "write_combined_pvalue_train_mmd_two_sample_test": (write_combined_pvalue_train_mmd_two_sample_test, write_combined_pvalue_train_mmd_two_sample_test_txt),
+                "write_data_train_mmd_values": (write_data_train_mmd_values, write_data_train_mmd_values_txt),
+                "write_prop_val_mmd_two_sample_test": (write_prop_val_mmd_two_sample_test, write_prop_val_mmd_two_sample_test_txt),
+                "write_combined_pvalue_val_mmd_two_sample_test": (write_combined_pvalue_val_mmd_two_sample_test, write_combined_pvalue_val_mmd_two_sample_test_txt),
+                "write_data_val_mmd_values": (write_data_val_mmd_values, write_data_val_mmd_values_txt),
+                "write_data_latent_mmd_ref_values": (write_data_mmd_ref_values, write_data_mmd_ref_values_txt),
+                "write_mean_diff_prior_train_norm": (write_mean_diff_prior_train_norm, write_mean_diff_prior_train_norm_txt),
+                "write_mean_diff_prior_val_norm": (write_mean_diff_prior_val_norm, write_mean_diff_prior_val_norm_txt),
+                "write_covm_diff_prior_train_norm": (write_covm_diff_prior_train_norm, write_covm_diff_prior_train_norm_txt),
+                "write_covm_diff_prior_val_norm": (write_covm_diff_prior_val_norm, write_covm_diff_prior_val_norm_txt),
+            },
+            "headers": {
+                "write_header_train_mvn_test": write_header_train_mvn_test,
+                "write_header_val_mvn_test": write_header_val_mvn_test,
+                "write_header_prop_train_mmd_two_sample_test": write_header_prop_train_mmd_two_sample_test,
+                "write_header_combined_pvalue_train_mmd_two_sample_test": write_header_combined_pvalue_train_mmd_two_sample_test,
+                "write_header_train_mmd_values": write_header_train_mmd_values,
+                "write_header_prop_val_mmd_two_sample_test": write_header_prop_val_mmd_two_sample_test,
+                "write_header_combined_pvalue_val_mmd_two_sample_test": write_header_combined_pvalue_val_mmd_two_sample_test,
+                "write_header_val_mmd_values": write_header_val_mmd_values,
+                "write_header_mmd_ref_values": write_header_mmd_ref_values,
+                "write_header_mean_diff_prior_train_norm": write_header_mean_diff_prior_train_norm,
+                "write_header_mean_diff_prior_val_norm": write_header_mean_diff_prior_val_norm,
+                "write_header_covm_diff_prior_train_norm": write_header_covm_diff_prior_train_norm,
+                "write_header_covm_diff_prior_val_norm": write_header_covm_diff_prior_val_norm,
+            }
+        }
+
+    def inspect_latent_distribution_2(self, make_plots = True, n_neighbors = 100,  min_dist = 0.3, fit_prior_only = False, denseMAP = False,
                                     mmd_params=None, two_sample_test_params = None, test_repeats = 100, test_sample_size = 300):
         """
         Inspect latent space distribution.
@@ -2032,6 +2451,165 @@ class Diagnostics:
 
         }
 
+##################################################
+# inference diagnostics functions
+##################################################
+
+def mmd_with_testset(experiment, inference_sample, inverted_vec, makes_refs = False, storing_directory = None, filename_ref = None):
+    """
+    Compute MMD statistics between the inference sample and test set filtered to class images associated with inverted_vec.
+    It also computes MMD between training set and test set as reference, if makes_refs is True.
+    The MMD is computed using RBF kernel with bandwidth selected via median heuristic. To compare inference_sample and test set,
+    the heuristic is computed on their combined data. To compare training set and test set, the heuristic is computed on their combined data.
+    :param experiment: experiment object containing test and training dataloaders
+    :param inference_sample: tensor of shape (num_samples, dim_x)
+    :param inverted_vec: a one-hot tensor of shape (dim_y,) indicating the inverted class
+    :param makes_refs: whether to compute MMD between training set and test set as reference
+    :param storing_directory: if not None, path to directory where to store results.
+    :param filename_ref: if not None, a reference to add to the filename when storing results.
+    :return: MMD statistics between inference sample and test set, and between training set and test set
+    """
+    import fastabc_inversion.utils.evaluation.mmd as mmd
+
+    print(f"Computing MMD statistics between inference sample and test set for {inverted_vec}...")
+
+    sample_size = inference_sample.shape[0]
+    # reshape inference_sample to 2D if needed
+    if len(inference_sample.shape) > 2:
+        inference_sample = inference_sample.view(sample_size, -1).numpy()
+
+    # get test set filtered to inverted_vec
+    test_x_list = []
+    for x_batch, y_batch in experiment.test_loader:
+        mask = torch.all(y_batch == inverted_vec, dim=1)
+        if torch.sum(mask) > 0:
+            test_x_list.append(x_batch[mask])
+    if len(test_x_list) == 0:
+        raise ValueError("No test set samples found for the inverted class.")
+    test_x = torch.cat(test_x_list, dim=0)
+    # reshape test_x to 2D if needed
+    if len(test_x.shape) > 2:
+        test_x = test_x.view(test_x.shape[0], -1).numpy()
+    del test_x_list
+
+    # estimate mmd parameter gamma using median heuristic on combined data
+    # with the function estimate_median_pairwise_dists
+    combined_data = np.vstack([inference_sample, test_x])
+    sq_median_test = mmd.estimate_median_pairwise_dists(combined_data, sample_ratio=1.0, chunk_size=300)
+    gamma_test = 1 / sq_median_test
+
+    # make mmd_params dictionary
+    mmd_kernel_params_test = {
+        "metric": "rbf",
+        "gamma": gamma_test,
+    }
+
+    # estimate MMD metric between inference sample and multiple subset of test set of size sample_size
+    test_size = test_x.shape[0]
+    mmd_values_test = []
+    num_repeats = 100
+    for _ in range(num_repeats):
+        if test_size <= sample_size:
+            test_subset = test_x
+        else:
+            indices = np.random.choice(test_size, size=sample_size, replace=False)
+            test_subset = test_x[indices]
+
+        mmd_values_test.append(mmd.MMD2(inference_sample, test_subset,
+                                    kernel_params=mmd_kernel_params_test, unbiased=False)[0])
+
+    mmd_values_test = np.array(mmd_values_test)
+    mmd_stats_test = {
+        "mean": np.mean(mmd_values_test),
+        "std": np.std(mmd_values_test),
+        "median": np.median(mmd_values_test),
+        "q25": np.quantile(mmd_values_test, 0.25),
+        "q75": np.quantile(mmd_values_test, 0.75),
+        "q025": np.quantile(mmd_values_test, 0.025),
+        "q975": np.quantile(mmd_values_test, 0.975),
+    }
+
+    if storing_directory is not None:
+        # pickle mmd_values_test to a file
+        import pickle
+        with open(f"{storing_directory}/mmd_inference_vs_testset_values_{filename_ref}.pkl", "wb") as f:
+            pickle.dump(mmd_values_test, f)
+
+        # store stats in .txt file
+        with open(f"{storing_directory}/mmd_inference_vs_testset_stats_{filename_ref}.txt", "w") as f:
+            f.write("MMD statistics between inference sample and test set:\n")
+            for key, value in mmd_stats_test.items():
+                f.write(f"{key}: {value}\n")
+
+    if makes_refs:
+        print("Computing MMD statistics between training set and test set as reference...")
+        # read all training images corresponding to inverted_vec
+        train_x_list = []
+        for x_batch, y_batch in experiment.train_loader:
+            mask = torch.all(y_batch == inverted_vec, dim=1)
+            if torch.sum(mask) > 0:
+                train_x_list.append(x_batch[mask])
+        if len(train_x_list) == 0:
+            raise ValueError("No training set samples found for the inverted class.")
+        train_x = torch.cat(train_x_list, dim=0)
+        # reshape train_x to 2D if needed
+        if len(train_x.shape) > 2:
+            train_x = train_x.view(train_x.shape[0], -1).numpy()
+        del train_x_list
+
+        # estimate mmd parameter gamma using median heuristic on combined data
+        combined_data_ref = np.vstack([train_x, test_x])
+        sq_median_ref = mmd.estimate_median_pairwise_dists(combined_data_ref, sample_ratio=1.0, chunk_size=300)
+        gamma_ref = gamma_test # use the same gamma as before
+
+        # make mmd_params dictionary
+        mmd_kernel_params_ref = {
+            "metric": "rbf",
+            "gamma": gamma_ref,
+        }
+
+        # estimate MMD metric between training multiple samples of size ref_sample_size and multiple subset of test set of ref_sample_size
+        ref_sample_size = 500
+        train_size = train_x.shape[0]
+        mmd_values_ref = []
+        num_repeats = 100
+        for _ in range(num_repeats):
+            if train_size <= ref_sample_size:
+                train_subset = train_x
+            else:
+                indices = np.random.choice(train_size, size=ref_sample_size, replace=False)
+                train_subset = train_x[indices]
+
+            if test_size <= ref_sample_size:
+                test_subset = test_x
+            else:
+                indices = np.random.choice(test_size, size=ref_sample_size, replace=False)
+                test_subset = test_x[indices]
+
+            mmd_values_ref.append(mmd.MMD2(train_subset, test_subset,
+                                        kernel_params=mmd_kernel_params_ref, unbiased=False)[0])
+        mmd_values_ref = np.array(mmd_values_ref)
+        mmd_stats_ref = {
+            "mean": np.mean(mmd_values_ref),
+            "std": np.std(mmd_values_ref),
+            "median": np.median(mmd_values_ref),
+            "q25": np.quantile(mmd_values_ref, 0.25),
+            "q75": np.quantile(mmd_values_ref, 0.75),
+            "q025": np.quantile(mmd_values_ref, 0.025),
+            "q975": np.quantile(mmd_values_ref, 0.975),
+        }
+
+        if storing_directory is not None:
+            # pickle mmd_values_ref to a file
+            import pickle
+            with open(f"{storing_directory}/mmd_train_vs_testset_values.pkl", "wb") as f:
+                pickle.dump(mmd_values_ref, f)
+
+            # store stats in .txt file
+            with open(f"{storing_directory}/mmd_train_vs_testset_stats.txt", "w") as f:
+                f.write("MMD statistics between training set and test set:\n")
+                for key, value in mmd_stats_ref.items():
+                    f.write(f"{key}: {value}\n")
 
 
 

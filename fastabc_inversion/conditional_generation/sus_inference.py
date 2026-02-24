@@ -30,6 +30,8 @@ def prep_SuS(experiment):
         sp.stats.norm.cdf(u)
     )  # from standard to latent distribution
 
+    from scipy.stats import wasserstein_distance
+
     def g_fun(
             u_vect,
             latent_dim,
@@ -53,7 +55,7 @@ def prep_SuS(experiment):
         :return: computed differences between the generated vectors and the observation
         """
 
-        implemented_distances = ['l1', 'l2', 'cross_entropy', 'kl_divergence', 'slant', 'thickness', 'length']
+        implemented_distances = ['l1', 'l2', 'cross_entropy', 'kl_divergence', 'slant', 'thickness', 'length', 'emd']
         if norm_fct is not None:
             if norm_fct not in implemented_distances:
                 raise ValueError(f"Distance {norm_fct} not implemented. Choose one of {implemented_distances}.")
@@ -66,6 +68,9 @@ def prep_SuS(experiment):
         u_vect = (
             torch.FloatTensor(u_vect).view(-1, latent_dim).to(device)
         )  # to device
+
+        if norm_fct is None:
+            norm_fct = 'l2'  # default
 
         with torch.no_grad():
             gen_x, gen_y = generator_net(u_vect)
@@ -93,18 +98,19 @@ def prep_SuS(experiment):
                 observation = experiment.torch_clr_transformer(observation.unsqueeze(0))
                 gen_i = experiment.torch_clr_transformer(gen_i)
 
-        if norm_fct is None:
-            # Sum of squared differences
+        if norm_fct == 'l2':
             gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=2).numpy()
-        else:
-            if norm_fct == 'l2':
-                gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=2).numpy()
-            if norm_fct == 'l1' or norm_fct == 'slant' or norm_fct == 'thickness' or norm_fct == 'length':
-                gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=1).numpy()
-            if norm_fct == 'cross_entropy':
-                gen_i_norm_diff = torch_dist.cross_entropy_torch(gen_i, observation).numpy()
-            if norm_fct == 'kl_divergence':
-                gen_i_norm_diff = torch_dist.D_KL_simplex(gen_i, observation).numpy()
+        if norm_fct == 'l1' or norm_fct == 'slant' or norm_fct == 'thickness' or norm_fct == 'length':
+            gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=1).numpy()
+        if norm_fct == 'cross_entropy':
+            gen_i_norm_diff = torch_dist.cross_entropy_torch(gen_i, observation).numpy()
+        if norm_fct == 'kl_divergence':
+            gen_i_norm_diff = torch_dist.D_KL_simplex(gen_i, observation).numpy()
+        if norm_fct== 'emd':
+            domain = np.arange(gen_i.shape[1]) # assuming gen_i is of shape (1, num_classes)
+            gen_i_norm_diff = wasserstein_distance(u_values=domain, v_values=domain,
+                                                   u_weights=gen_i.numpy().flatten(),
+                                                   v_weights=observation.flatten())
 
         #print(f"Generated value: {gen_i}, Observation: {observation}, Difference: {gen_i_norm_diff}")
 

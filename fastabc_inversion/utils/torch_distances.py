@@ -137,4 +137,3 @@ if __name__ == "__main__":
 
     # test KL divergence
     print(D_KL_simplex(x_prob, y_prob))
-
