@@ -4,11 +4,18 @@ import torch
 import time
 import os
 import pickle
-from fastabc_inversion.utils.SubsetSimulation.ERADist import ERADist
-from fastabc_inversion.utils.SubsetSimulation.aCS import aCS
-from fastabc_inversion.utils.SubsetSimulation.corr_factor import corr_factor
-import fastabc_inversion.utils.torch_distances as torch_dist
-from fastabc_inversion.conditional_generation.mnist.morphology.measure import measure_slant, measure_thickness, measure_length
+from fastabc_inversion.conditional_generation.SubsetSimulation import ERADist
+from fastabc_inversion.conditional_generation.SubsetSimulation import aCS
+from fastabc_inversion.conditional_generation.SubsetSimulation.corr_factor import (
+    corr_factor,
+)
+import fastabc_inversion.conditional_generation.utils.torch_distances as torch_dist
+from fastabc_inversion.conditional_generation.mnist.morphology.measure import (
+    measure_slant,
+    measure_thickness,
+    measure_length,
+)
+
 
 def prep_SuS(experiment):
     """
@@ -23,7 +30,9 @@ def prep_SuS(experiment):
 
     for i in range(experiment.latent_dim):
         pi_pdf.append(
-            ERADist(experiment.latent_dist_name, "PAR", experiment.latent_dist_params_list)
+            ERADist(
+                experiment.latent_dist_name, "PAR", experiment.latent_dist_params_list
+            )
         )  # independent rv
 
     experiment.u2x = lambda u: pi_pdf[0].icdf(
@@ -33,13 +42,13 @@ def prep_SuS(experiment):
     from scipy.stats import wasserstein_distance
 
     def g_fun(
-            u_vect,
-            latent_dim,
-            generator_net,
-            device,
-            observation,
-            u2x,
-            norm_fct=None,
+        u_vect,
+        latent_dim,
+        generator_net,
+        device,
+        observation,
+        u2x,
+        norm_fct=None,
     ):
         """
         Limit State Function
@@ -55,80 +64,102 @@ def prep_SuS(experiment):
         :return: computed differences between the generated vectors and the observation
         """
 
-        implemented_distances = ['l1', 'l2', 'cross_entropy', 'kl_divergence', 'slant', 'thickness', 'length', 'emd']
+        implemented_distances = [
+            "l1",
+            "l2",
+            "cross_entropy",
+            "kl_divergence",
+            "slant",
+            "thickness",
+            "length",
+            "emd",
+        ]
         if norm_fct is not None:
             if norm_fct not in implemented_distances:
-                raise ValueError(f"Distance {norm_fct} not implemented. Choose one of {implemented_distances}.")
+                raise ValueError(
+                    f"Distance {norm_fct} not implemented. Choose one of {implemented_distances}."
+                )
 
         # back to original latent dist
         u_vect = u2x(
             u_vect.reshape(latent_dim, -1)
         )  # TODO: check if reshaping is needed
 
-        u_vect = (
-            torch.FloatTensor(u_vect).view(-1, latent_dim).to(device)
-        )  # to device
+        u_vect = torch.FloatTensor(u_vect).view(-1, latent_dim).to(device)  # to device
 
         if norm_fct is None:
-            norm_fct = 'l2'  # default
+            norm_fct = "l2"  # default
 
         with torch.no_grad():
             gen_x, gen_y = generator_net(u_vect)
             gen_x = gen_x.cpu().squeeze().numpy()
-            gen_x = gen_x * 0.5 + 0.5 # de-normalize to [0,1] ! important for morphology measures
+            gen_x = (
+                gen_x * 0.5 + 0.5
+            )  # de-normalize to [0,1] ! important for morphology measures
 
-            if norm_fct == 'slant':
+            if norm_fct == "slant":
                 # compute slant for gen_x
                 gen_i = measure_slant(gen_x)
-                #gen_i = np.rad2deg(gen_i)
+                # gen_i = np.rad2deg(gen_i)
                 # make observation a tensor with two dimensions
                 observation = np.array(observation).reshape(1, -1)
-            elif norm_fct == 'thickness':
+            elif norm_fct == "thickness":
                 gen_i = measure_thickness(gen_x)
                 observation = np.array(observation).reshape(1, -1)
-            elif norm_fct == 'length':
+            elif norm_fct == "length":
                 gen_i = measure_length(gen_x)
                 observation = np.array(observation).reshape(1, -1)
             else:
                 gen_i = gen_y  # use the generated labels for the g_fun
                 gen_i = gen_i.cpu()
 
-            if norm_fct in ['l1', 'l2']:
+            if norm_fct in ["l1", "l2"]:
                 # transform to clr space
                 observation = experiment.torch_clr_transformer(observation.unsqueeze(0))
                 gen_i = experiment.torch_clr_transformer(gen_i)
 
-        if norm_fct == 'l2':
+        if norm_fct == "l2":
             gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=2).numpy()
-        if norm_fct == 'l1' or norm_fct == 'slant' or norm_fct == 'thickness' or norm_fct == 'length':
+        if (
+            norm_fct == "l1"
+            or norm_fct == "slant"
+            or norm_fct == "thickness"
+            or norm_fct == "length"
+        ):
             gen_i_norm_diff = torch_dist.lpp_torch(gen_i, observation, p=1).numpy()
-        if norm_fct == 'cross_entropy':
+        if norm_fct == "cross_entropy":
             gen_i_norm_diff = torch_dist.cross_entropy_torch(gen_i, observation).numpy()
-        if norm_fct == 'kl_divergence':
+        if norm_fct == "kl_divergence":
             gen_i_norm_diff = torch_dist.D_KL_simplex(gen_i, observation).numpy()
-        if norm_fct== 'emd':
-            domain = np.arange(gen_i.shape[1]) # assuming gen_i is of shape (1, num_classes)
-            gen_i_norm_diff = wasserstein_distance(u_values=domain, v_values=domain,
-                                                   u_weights=gen_i.numpy().flatten(),
-                                                   v_weights=observation.flatten())
+        if norm_fct == "emd":
+            domain = np.arange(
+                gen_i.shape[1]
+            )  # assuming gen_i is of shape (1, num_classes)
+            gen_i_norm_diff = wasserstein_distance(
+                u_values=domain,
+                v_values=domain,
+                u_weights=gen_i.numpy().flatten(),
+                v_weights=observation.flatten(),
+            )
 
-        #print(f"Generated value: {gen_i}, Observation: {observation}, Difference: {gen_i_norm_diff}")
+        # print(f"Generated value: {gen_i}, Observation: {observation}, Difference: {gen_i_norm_diff}")
 
         return gen_i_norm_diff
 
     experiment.g_fun = g_fun
     return None
 
+
 def SuS_run(
-        experiment,
-        N,
-        p0,
-        epsilon,
-        observation_vec,
-        norm_fct=None,
-        max_it=50,
-        sus_run_id=0,
-        return_full_results=False,
+    experiment,
+    N,
+    p0,
+    epsilon,
+    observation_vec,
+    norm_fct=None,
+    max_it=50,
+    sus_run_id=0,
+    return_full_results=False,
 ):
     """
     Run SuS algorithm
@@ -212,7 +243,9 @@ def SuS_run(
             inverted_latent = np.zeros([N, experiment.latent_dim])
 
             for iii in range(N):
-                u_j_vect = experiment.u2x(u_j_sort[:, iii].reshape(experiment.latent_dim, -1))
+                u_j_vect = experiment.u2x(
+                    u_j_sort[:, iii].reshape(experiment.latent_dim, -1)
+                )
                 inverted_latent[iii, :] = torch.FloatTensor(u_j_vect).view(
                     -1, experiment.latent_dim
                 )  # on cpu
@@ -248,9 +281,7 @@ def SuS_run(
             )  # coeff of variation(Ref. 2 Eq. 9)
 
         # select seeds
-        samplesU["seeds"].append(
-            u_j_sort[:, : int(nF[j])]
-        )  # store ordered level seeds
+        samplesU["seeds"].append(u_j_sort[:, : int(nF[j])])  # store ordered level seeds
 
         # randomize the totaling of the samples (to avoid bias)
         idx_rnd = np.random.permutation(int(nF[j]))
@@ -300,7 +331,7 @@ def SuS_run(
     print(f"Run #{sus_run_id} - Failure probability estimate = {Pf_SuS}")
 
     # coefficient of variation estimate
-    delta_SuS = np.sqrt(np.sum(delta ** 2))  # (Ref. 2 Eq. 12)
+    delta_SuS = np.sqrt(np.sum(delta**2))  # (Ref. 2 Eq. 12)
     print(f"Coeff. variation = {delta_SuS}")
 
     # Pf evolution
@@ -337,7 +368,7 @@ def SuS_run(
     results_dict = {
         "p_f": Pf_SuS,  # final P_f
         "delta": delta_SuS,  # final delta
-        "final_epsilon": b[- 1],
+        "final_epsilon": b[-1],
         "all_prob": prob,
         "all_thresholds": b,
         "all_delta": delta,
@@ -350,6 +381,7 @@ def SuS_run(
     }
 
     return results_dict
+
 
 def run_sus_inference(experiment, label_obs, inference_params):
     """
@@ -378,28 +410,32 @@ def run_sus_inference(experiment, label_obs, inference_params):
     # if one value transform into one-hot vector
     # if already a vector, leave as is
     # does not apply to slant
-    if norm_fct not in ['slant', 'thickness', 'length'] :
+    if norm_fct not in ["slant", "thickness", "length"]:
         if isinstance(label_obs, int):
             # one-hot encode
-            observation = experiment.label_transform(label_obs) # leave clr transformation to prep_SuS and g_fun
+            observation = experiment.label_transform(
+                label_obs
+            )  # leave clr transformation to prep_SuS and g_fun
         else:
             # make sure it is a torch tensor
             observation = torch.tensor(label_obs, dtype=torch.float)
     else:
-        observation = label_obs  # for slant and thickness, observation is a scalar value
+        observation = (
+            label_obs  # for slant and thickness, observation is a scalar value
+        )
 
     for epsilon in epsilon_vec:
         sus_runs_results_dict = {
             "p_f": [],
             "delta": [],
-            "all_prob":[],
-            "all_thresholds":[],
-            "all_delta":[],
+            "all_prob": [],
+            "all_thresholds": [],
+            "all_delta": [],
             "final_epsilon": [],
             "original_epsilon": [],
             "SuS_run_time": [],
-            "Pf_line":[],
-            "b_line":[],
+            "Pf_line": [],
+            "b_line": [],
             "final_inverted_latent": torch.FloatTensor(),
             "samples_per_thresh": [] if return_full_results else None,
         }
@@ -407,7 +443,7 @@ def run_sus_inference(experiment, label_obs, inference_params):
         # run SuS
         for run in range(sus_runs):
             sus_run_result = SuS_run(
-                experiment = experiment,
+                experiment=experiment,
                 N=N,
                 p0=p0,
                 epsilon=epsilon,
@@ -422,7 +458,9 @@ def run_sus_inference(experiment, label_obs, inference_params):
             sus_runs_results_dict["p_f"].append(sus_run_result["p_f"])
             sus_runs_results_dict["delta"].append(sus_run_result["delta"])
             sus_runs_results_dict["all_prob"].append(sus_run_result["all_prob"])
-            sus_runs_results_dict["all_thresholds"].append(sus_run_result["all_thresholds"])
+            sus_runs_results_dict["all_thresholds"].append(
+                sus_run_result["all_thresholds"]
+            )
             sus_runs_results_dict["all_delta"].append(sus_run_result["all_delta"])
 
             sus_runs_results_dict["final_epsilon"].append(
@@ -431,9 +469,7 @@ def run_sus_inference(experiment, label_obs, inference_params):
             sus_runs_results_dict["original_epsilon"].append(
                 sus_run_result["original_epsilon"]
             )
-            sus_runs_results_dict["SuS_run_time"].append(
-                sus_run_result["SuS_run_time"]
-            )
+            sus_runs_results_dict["SuS_run_time"].append(sus_run_result["SuS_run_time"])
             # concatenate latent samples in a single torch Floattensor (for all runs)
             sus_runs_results_dict["final_inverted_latent"] = torch.cat(
                 (
@@ -445,14 +481,14 @@ def run_sus_inference(experiment, label_obs, inference_params):
             sus_runs_results_dict["Pf_line"].append(sus_run_result["Pf_line"])
             sus_runs_results_dict["b_line"].append(sus_run_result["b_line"])
             if return_full_results:
-                sus_runs_results_dict["samples_per_thresh"].append(sus_run_result["samples_per_thresh"])
+                sus_runs_results_dict["samples_per_thresh"].append(
+                    sus_run_result["samples_per_thresh"]
+                )
 
         all_epsilon_results[epsilon] = sus_runs_results_dict
 
     # dump inference results with latent samples
-    obs_inference_dir = (
-        f"{experiment.inference_dir}/label_{label_obs}"
-    )
+    obs_inference_dir = f"{experiment.inference_dir}/label_{label_obs}"
     os.makedirs(obs_inference_dir, exist_ok=True)
 
     inference_results_filename = f"{obs_inference_dir}/inference_results_dict.pkl"
@@ -461,8 +497,11 @@ def run_sus_inference(experiment, label_obs, inference_params):
 
     return all_epsilon_results
 
+
 def run_sus_inference_all_observations(
-        experiment, observation_vec, inference_params,
+    experiment,
+    observation_vec,
+    inference_params,
 ):
     """
     Run inference using SuS for all observations in observation_vec
@@ -479,7 +518,11 @@ def run_sus_inference_all_observations(
     for observation_idx in experiment.inverted_obs_idx:
         print(f"Running inference for condition {observation_idx} ...")
         # Convert list to tuple for dictionary key
-        dict_key = tuple(observation_idx) if isinstance(observation_idx, list) else observation_idx
+        dict_key = (
+            tuple(observation_idx)
+            if isinstance(observation_idx, list)
+            else observation_idx
+        )
 
         if dict_key not in experiment.all_obs_inference_results:
             experiment.all_obs_inference_results[dict_key] = {}
@@ -487,16 +530,19 @@ def run_sus_inference_all_observations(
         experiment.all_obs_inference_results[dict_key] = run_sus_inference(
             experiment=experiment,
             label_obs=observation_idx,  # Pass original format to function
-            inference_params=inference_params
+            inference_params=inference_params,
         )
 
     with open(f"{experiment.inference_dir}/inference_config.txt", "a+") as f:
         # add date and time
         f.write(f"\n Experiment date and time: {time.ctime()}\n")
         f.write(f"Experiment inference parameters: {inference_params}\n")
-        f.write(f"Experiment inverted observation indices: {experiment.inverted_obs_idx}\n")
+        f.write(
+            f"Experiment inverted observation indices: {experiment.inverted_obs_idx}\n"
+        )
 
     return experiment.all_obs_inference_results
+
 
 def get_inverted_x_y(experiment, inverted_latent, return_labels=True):
     """
@@ -508,7 +554,9 @@ def get_inverted_x_y(experiment, inverted_latent, return_labels=True):
 
     inverted_latent_gpu = inverted_latent.to(experiment.device)
     with torch.no_grad():
-        inverted_x, inverted_y = experiment.netG(inverted_latent_gpu)  # through generator
+        inverted_x, inverted_y = experiment.netG(
+            inverted_latent_gpu
+        )  # through generator
 
     inverted_x = inverted_x.cpu()
     inverted_y = inverted_y.cpu()
@@ -517,6 +565,7 @@ def get_inverted_x_y(experiment, inverted_latent, return_labels=True):
         inverted_y = experiment.label_transform.simplex_vec_to_label(inverted_y)
 
     return inverted_x, inverted_y
+
 
 def get_all_epsilon_inverted_x_y(experiment):
     """
@@ -536,6 +585,7 @@ def get_all_epsilon_inverted_x_y(experiment):
 
     return all_epsilon_inverted_x_dict, all_epsilon_inverted_y_dict
 
+
 def read_sus_inference_results_from_files(experiment, observation_vec):
     """
     Read SuS inference results from files for all observations in observation_vec
@@ -551,18 +601,18 @@ def read_sus_inference_results_from_files(experiment, observation_vec):
     for observation_idx in experiment.inverted_obs_idx:
         print(f"Reading inference results for condition {observation_idx} ...")
         # Convert list to tuple for dictionary key
-        dict_key = tuple(observation_idx) if isinstance(observation_idx, list) else observation_idx
+        dict_key = (
+            tuple(observation_idx)
+            if isinstance(observation_idx, list)
+            else observation_idx
+        )
 
         if dict_key not in experiment.all_obs_inference_results:
             experiment.all_obs_inference_results[dict_key] = {}
 
-        obs_inference_dir = (
-            f"{experiment.inference_dir}/label_{observation_idx}"
-        )
+        obs_inference_dir = f"{experiment.inference_dir}/label_{observation_idx}"
         inference_results_filename = f"{obs_inference_dir}/inference_results_dict.pkl"
         with open(inference_results_filename, "rb") as f:
             experiment.all_obs_inference_results[dict_key] = pickle.load(f)
 
     return experiment.all_obs_inference_results
-
-

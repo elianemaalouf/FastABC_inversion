@@ -38,7 +38,7 @@ def calculate_frechet_distance(act1, act2):
     return fd
 
 
-def compute_fpd_pca(real_images, generated_images, fitted_pca = None, n_components=0.85):
+def compute_fpd_pca(real_images, generated_images, fitted_pca=None, n_components=0.85):
     """
     Computes the Fréchet PCA Distance (FPD) between two sets of images.
 
@@ -57,8 +57,7 @@ def compute_fpd_pca(real_images, generated_images, fitted_pca = None, n_componen
     print(f"Real images range: [{real_min:.4f}, {real_max:.4f}]")
     print(f"Generated images range: [{gen_min:.4f}, {gen_max:.4f}]")
 
-    is_normalized = (real_min >= -1 and real_max <= 1 and
-                     gen_min >= -1 and gen_max <= 1)
+    is_normalized = real_min >= -1 and real_max <= 1 and gen_min >= -1 and gen_max <= 1
 
     if not is_normalized:
         print("Rescaling images to [0, 1] range...")
@@ -66,7 +65,9 @@ def compute_fpd_pca(real_images, generated_images, fitted_pca = None, n_componen
         generated_images = (generated_images - gen_min) / (gen_max - gen_min)
 
     real_flat = real_images.reshape(real_images.shape[0], -1).astype(np.float32)
-    gen_flat = generated_images.reshape(generated_images.shape[0], -1).astype(np.float32)
+    gen_flat = generated_images.reshape(generated_images.shape[0], -1).astype(
+        np.float32
+    )
 
     # 2. Fit PCA on REAL data
     if fitted_pca is None:
@@ -76,7 +77,7 @@ def compute_fpd_pca(real_images, generated_images, fitted_pca = None, n_componen
     else:
         pca = fitted_pca
 
-    print(f'Total number of components used after PCA : {pca.n_components_}')
+    print(f"Total number of components used after PCA : {pca.n_components_}")
 
     # 3. Transform both sets into the PCA feature space
     real_features = pca.transform(real_flat)
@@ -93,9 +94,9 @@ if __name__ == "__main__":
     from torchvision.datasets import MNIST
 
     # 1. Load MNIST data
-    mnist_dataset = MNIST(root='./data', train=True, download=True)
+    mnist_dataset = MNIST(root="./data", train=True, download=True)
     x_train = mnist_dataset.data.numpy()  # Convert to numpy array
-    x_test = MNIST(root='./data', train=False, download=True).data.numpy()
+    x_test = MNIST(root="./data", train=False, download=True).data.numpy()
 
     # 2. Create our "datasets"
     N_SAMPLES = 10000
@@ -105,7 +106,7 @@ if __name__ == "__main__":
 
     # Set 2: "Perfect" generated images (just other real images)
     # This should result in a very low FPD score.
-    real_set_2 = x_train[N_SAMPLES: N_SAMPLES * 2]
+    real_set_2 = x_train[N_SAMPLES : N_SAMPLES * 2]
 
     # Set 3: "Mediocre" generated images (real images + some noise)
     noise = np.random.normal(0, 50, real_set_1.shape)

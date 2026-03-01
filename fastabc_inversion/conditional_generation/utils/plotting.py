@@ -5,6 +5,7 @@ import seaborn as sns
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 
+
 def plots_imports():
     import matplotlib as mpl
 
@@ -18,7 +19,7 @@ def plots_imports():
 
 
 def base_config(
-    mpl = None,
+    mpl=None,
     figsize=(8, 6),
     family="serif",
     fonttype="Liberation Serif",
@@ -48,8 +49,19 @@ def base_config(
     mpl.rcParams["ps.fonttype"] = 42
     mpl.rcParams["lines.linewidth"] = 1
 
-def plot_histograms(data, labels, plot_title,
-                    weights = None, bins = 30, colors = None, save_location=None, dpi=600, show = False, **kwargs):
+
+def plot_histograms(
+    data,
+    labels,
+    plot_title,
+    weights=None,
+    bins=30,
+    colors=None,
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Function to plot histograms of given data.
     :param data: array containing the data to plot. Format as [number of histograms, values per histogram]
@@ -71,17 +83,24 @@ def plot_histograms(data, labels, plot_title,
 
     fig, ax = plt.subplots(nrows=1, ncols=1)
 
-    weights = np.ones(data.shape[1])/data.shape[1] if weights is None else weights
+    weights = np.ones(data.shape[1]) / data.shape[1] if weights is None else weights
 
     for i in range(data.shape[0]):
-        ax.hist(data[i, :], bins=bins, color=colors[i], edgecolor = colors[i], alpha=0.5,
-                weights = weights, label=labels[i])
+        ax.hist(
+            data[i, :],
+            bins=bins,
+            color=colors[i],
+            edgecolor=colors[i],
+            alpha=0.5,
+            weights=weights,
+            label=labels[i],
+        )
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     ax.yaxis.set_major_formatter(PercentFormatter(1))
 
-    plt.legend(fontsize='small')
+    plt.legend(fontsize="small")
     plt.title(plot_title)
     plt.tight_layout()
 
@@ -92,7 +111,18 @@ def plot_histograms(data, labels, plot_title,
 
     plt.close()
 
-def plot_true_vs_recon_grid(samples, recon_rmse, labels, num_samples, cmap= 'gray', save_location=None, dpi=600, show = False, **kwargs):
+
+def plot_true_vs_recon_grid(
+    samples,
+    recon_rmse,
+    labels,
+    num_samples,
+    cmap="gray",
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Function to plot a grid of true vs reconstructed images.
     :param samples: array containing the samples to plot.
@@ -110,7 +140,9 @@ def plot_true_vs_recon_grid(samples, recon_rmse, labels, num_samples, cmap= 'gra
     base_config(mpl, **kwargs)
 
     grid_size = int(np.sqrt(num_samples))
-    fig, axes = plt.subplots(nrows=grid_size, ncols=grid_size*2, figsize=(grid_size*2, grid_size))
+    fig, axes = plt.subplots(
+        nrows=grid_size, ncols=grid_size * 2, figsize=(grid_size * 2, grid_size)
+    )
 
     vmin = np.min(samples)
     vmax = np.max(samples)
@@ -118,14 +150,19 @@ def plot_true_vs_recon_grid(samples, recon_rmse, labels, num_samples, cmap= 'gra
     for i in range(grid_size):
         for j in range(grid_size):
             index = i * grid_size + j
-            im_1 = axes[i, 2*j].imshow(samples[index, :, :], cmap=cmap)
-            axes[i, 2*j].axis('off')
-            axes[i, 2*j].set_title(f'True, {labels[index]}', fontsize=8)
+            im_1 = axes[i, 2 * j].imshow(samples[index, :, :], cmap=cmap)
+            axes[i, 2 * j].axis("off")
+            axes[i, 2 * j].set_title(f"True, {labels[index]}", fontsize=8)
             im_1.set_clim(vmin=vmin, vmax=vmax)
 
-            im_2 = axes[i, 2*j + 1].imshow(samples[num_samples + index, :, :], cmap=cmap)
-            axes[i, 2*j + 1].axis('off')
-            axes[i, 2*j + 1].set_title(f'RMSE= {recon_rmse[index]:.4f}, {labels[num_samples + index]}', fontsize=8)
+            im_2 = axes[i, 2 * j + 1].imshow(
+                samples[num_samples + index, :, :], cmap=cmap
+            )
+            axes[i, 2 * j + 1].axis("off")
+            axes[i, 2 * j + 1].set_title(
+                f"RMSE= {recon_rmse[index]:.4f}, {labels[num_samples + index]}",
+                fontsize=8,
+            )
             im_2.set_clim(vmin=vmin, vmax=vmax)
 
     plt.tight_layout()
@@ -135,7 +172,17 @@ def plot_true_vs_recon_grid(samples, recon_rmse, labels, num_samples, cmap= 'gra
         plt.savefig(save_location, dpi=dpi, bbox_inches="tight")
     plt.close()
 
-def plot_samples_grid(images, labels, num_samples=None, cmap = 'gray', save_location = None, dpi = 600, show =False, **kwargs):
+
+def plot_samples_grid(
+    images,
+    labels,
+    num_samples=None,
+    cmap="gray",
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Function to plot a grid of images.
     :param images: array containing the samples to plot.
@@ -150,7 +197,9 @@ def plot_samples_grid(images, labels, num_samples=None, cmap = 'gray', save_loca
 
     num_samples = num_samples if num_samples is not None else images.shape[0]
     grid_size = int(np.sqrt(num_samples))
-    fig, axes = plt.subplots(nrows=grid_size, ncols=grid_size, figsize=(grid_size, grid_size))
+    fig, axes = plt.subplots(
+        nrows=grid_size, ncols=grid_size, figsize=(grid_size, grid_size)
+    )
 
     vmin = np.min(images)
     vmax = np.max(images)
@@ -159,8 +208,8 @@ def plot_samples_grid(images, labels, num_samples=None, cmap = 'gray', save_loca
         for j in range(grid_size):
             index = i * grid_size + j
             im = axes[i, j].imshow(images[index, :, :], cmap=cmap)
-            axes[i, j].axis('off')
-            axes[i, j].set_title(f'{labels[index]}', fontsize=8)
+            axes[i, j].axis("off")
+            axes[i, j].set_title(f"{labels[index]}", fontsize=8)
             im.set_clim(vmin=vmin, vmax=vmax)
 
     plt.tight_layout()
@@ -170,7 +219,10 @@ def plot_samples_grid(images, labels, num_samples=None, cmap = 'gray', save_loca
         plt.savefig(save_location, dpi=dpi, bbox_inches="tight")
     plt.close()
 
-def plot_cov(cov, plot_title, vmin_vmax = None, save_location = None, dpi = 600, show = False, **kwargs):
+
+def plot_cov(
+    cov, plot_title, vmin_vmax=None, save_location=None, dpi=600, show=False, **kwargs
+):
     """
     Function to plot a covariance matrix.
     :param cov: the covariance matrix to plot
@@ -193,8 +245,8 @@ def plot_cov(cov, plot_title, vmin_vmax = None, save_location = None, dpi = 600,
     fig, ax = plt.subplots(1, 1, figsize=(30, 15))
     im = ax.imshow(cov)
     im.set_clim(vmin, vmax)
-    ax.set_xticks(range(dim), range(1,dim+1))
-    ax.set_yticks(range(dim), range(1, dim+1))
+    ax.set_xticks(range(dim), range(1, dim + 1))
+    ax.set_yticks(range(dim), range(1, dim + 1))
     ax_divider = make_axes_locatable(ax)
     cax = ax_divider.append_axes("right", size="5%", pad="2%")
     ax.title.set_text(plot_title)
@@ -205,7 +257,20 @@ def plot_cov(cov, plot_title, vmin_vmax = None, save_location = None, dpi = 600,
         plt.savefig(f"{save_location}", dpi=dpi, bbox_inches="tight")
     plt.close()
 
-def plot_scatters(data, labels, plot_title, make_scatter = True, axis_labels = None, colors = None, markers = None, save_location=None, dpi=600, show = False, **kwargs):
+
+def plot_scatters(
+    data,
+    labels,
+    plot_title,
+    make_scatter=True,
+    axis_labels=None,
+    colors=None,
+    markers=None,
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Function to plot scatter plots of given data.
     :param data: array containing the data to plot. Format as [number of scatter plots, x-axis values, y-axis values]
@@ -223,21 +288,29 @@ def plot_scatters(data, labels, plot_title, make_scatter = True, axis_labels = N
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
 
-    colors = sns.color_palette("muted", n_colors=data.shape[0]) if colors is None else colors
+    colors = (
+        sns.color_palette("muted", n_colors=data.shape[0]) if colors is None else colors
+    )
     fig, ax = plt.subplots(figsize=(20, 20))
 
     for i in range(data.shape[0]):
         if make_scatter:
-            ax.scatter(data[i, :, 0], data[i, :, 1], c=colors[i], label=labels[i], marker = markers[i] if markers is not None else '.')
+            ax.scatter(
+                data[i, :, 0],
+                data[i, :, 1],
+                c=colors[i],
+                label=labels[i],
+                marker=markers[i] if markers is not None else ".",
+            )
         else:
             ax.plot(data[i, :, 0], data[i, :, 1], c=colors[i], label=labels[i])
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     if axis_labels is not None:
-        ax.set_xlabel(axis_labels['x_label'])
-        ax.set_ylabel(axis_labels['y_label'])
-    plt.legend(fontsize='small')
+        ax.set_xlabel(axis_labels["x_label"])
+        ax.set_ylabel(axis_labels["y_label"])
+    plt.legend(fontsize="small")
     plt.title(plot_title)
     plt.tight_layout()
     if show:
@@ -247,7 +320,17 @@ def plot_scatters(data, labels, plot_title, make_scatter = True, axis_labels = N
 
     plt.close()
 
-def plot_samples_inspections(images, labels, labels_2 = None, random_samples=True, grid_size=5, save_fig_path = None, dpi = 600, **kwargs):
+
+def plot_samples_inspections(
+    images,
+    labels,
+    labels_2=None,
+    random_samples=True,
+    grid_size=5,
+    save_fig_path=None,
+    dpi=600,
+    **kwargs,
+):
     """
     Plot samples on a grid
     images: tensor of images
@@ -264,44 +347,64 @@ def plot_samples_inspections(images, labels, labels_2 = None, random_samples=Tru
 
     import random
     import torch
-    from fastabc_inversion.conditional_generation.utils.plotting import plots_imports, base_config
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plots_imports,
+        base_config,
+    )
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
 
     if random_samples:
-        fig, axes = plt.subplots(grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2))
+        fig, axes = plt.subplots(
+            grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2)
+        )
         for i in range(grid_size):
             for j in range(grid_size):
                 idx = random.randint(0, images.shape[0] - 1)
-                axes[i, j].imshow(images[idx].squeeze(), cmap='gray')
+                axes[i, j].imshow(images[idx].squeeze(), cmap="gray")
                 axes[i, j].set_title(f"Label: {labels[idx].item()}")
-                axes[i, j].axis('off')
+                axes[i, j].axis("off")
     else:
         num_classes = len(torch.unique(labels))
-        fig, axes = plt.subplots(num_classes, grid_size, figsize=(grid_size * 2, num_classes * 2))
+        fig, axes = plt.subplots(
+            num_classes, grid_size, figsize=(grid_size * 2, num_classes * 2)
+        )
         for c in range(num_classes):
             class_indices = (labels == c).nonzero(as_tuple=True)[0]
             for j in range(grid_size):
                 if j < len(class_indices):
                     idx = class_indices[j].item()
-                    axes[c, j].imshow(images[idx].squeeze(), cmap='gray')
+                    axes[c, j].imshow(images[idx].squeeze(), cmap="gray")
                     if labels_2 is None:
                         axes[c, j].set_title(f"Label: {labels[idx].item()}")
                     else:
-                        axes[c, j].set_title(f"Label: {labels[idx].item()}, label_2: {labels_2[idx].item()}")
-                axes[c, j].axis('off')
+                        axes[c, j].set_title(
+                            f"Label: {labels[idx].item()}, label_2: {labels_2[idx].item()}"
+                        )
+                axes[c, j].axis("off")
 
     plt.tight_layout()
 
     if save_fig_path is not None:
-        plt.savefig(save_fig_path, dpi = dpi, bbox_inches='tight')
+        plt.savefig(save_fig_path, dpi=dpi, bbox_inches="tight")
     else:
         plt.show()
 
     plt.close()
 
-def plot_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=False, save_location=None, dpi=600, show=False, **kwargs):
+
+def plot_stripplot(
+    df,
+    title,
+    value_labels=None,
+    yticks=None,
+    reverse_labels=False,
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Plots stripplots from a DataFrame with optional saving and customization features.
 
@@ -324,7 +427,10 @@ def plot_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=Fal
     """
 
     import pandas as pd
-    from fastabc_inversion.conditional_generation.utils.plotting import plots_imports, base_config
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plots_imports,
+        base_config,
+    )
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -332,10 +438,10 @@ def plot_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=Fal
     fig, ax = plt.subplots()
 
     # Determine order for x-axis
-    order = df['labels'].unique()[::-1] if reverse_labels else None
+    order = df["labels"].unique()[::-1] if reverse_labels else None
 
     # Check if 'class' column exists for color coding
-    use_class_colors = 'class' in df.columns
+    use_class_colors = "class" in df.columns
 
     # Set up color palette for classes (0-9)
     if use_class_colors:
@@ -346,59 +452,79 @@ def plot_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=Fal
 
     # Common stripplot configuration
     stripplot_config = {
-        'jitter': True,
-        'alpha': 0.6,
-        'orient': 'v',
-        'linewidth': 0,
-        'size': 3,
-        'dodge': False,
-        'order': order
+        "jitter": True,
+        "alpha": 0.6,
+        "orient": "v",
+        "linewidth": 0,
+        "size": 3,
+        "dodge": False,
+        "order": order,
     }
 
     # Check if values are lists/arrays and explode if needed
-    if isinstance(df['values'].iloc[0], (list, np.ndarray)):
-        df_exploded = df.explode('values')
-        df_exploded['values'] = pd.to_numeric(df_exploded['values'])
+    if isinstance(df["values"].iloc[0], (list, np.ndarray)):
+        df_exploded = df.explode("values")
+        df_exploded["values"] = pd.to_numeric(df_exploded["values"])
 
         # Create hue column based on original index position within each group
-        df_exploded['value_category'] = df_exploded.groupby(level=0).cumcount()
+        df_exploded["value_category"] = df_exploded.groupby(level=0).cumcount()
 
         if value_labels is not None:
-            df_exploded['value_category'] = df_exploded['value_category'].map(
-                lambda x: value_labels[x] if x < len(value_labels) else f'Value {x}'
+            df_exploded["value_category"] = df_exploded["value_category"].map(
+                lambda x: value_labels[x] if x < len(value_labels) else f"Value {x}"
             )
 
             # Use 'class' for coloring if available, otherwise use value_category
-            hue_column = 'class' if use_class_colors else 'value_category'
+            hue_column = "class" if use_class_colors else "value_category"
 
             # For the case with hue (multi-value)
-            sns.stripplot(x='labels', y='values', data=df_exploded, ax=ax,
-                          hue=hue_column, palette=palette, **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df_exploded,
+                ax=ax,
+                hue=hue_column,
+                palette=palette,
+                **stripplot_config,
+            )
 
     else:
         # For the simple case (single value)
         if use_class_colors:
-            sns.stripplot(x='labels', y='values', data=df, ax=ax,
-                          hue='class', palette=palette, **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df,
+                ax=ax,
+                hue="class",
+                palette=palette,
+                **stripplot_config,
+            )
         else:
-            sns.stripplot(x='labels', y='values', data=df, ax=ax,
-                          color='#1f77b4', **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df,
+                ax=ax,
+                color="#1f77b4",
+                **stripplot_config,
+            )
 
     ax.set_title(title)
-    ax.spines['left'].set_position(('outward', 5))
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["left"].set_position(("outward", 5))
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     if yticks is not None:
         ax.set_yticks(yticks)
 
     # Show legend if value_labels provided OR if using class colors
     if value_labels is not None or use_class_colors:
-        legend = ax.legend(title='', bbox_to_anchor=(1.05, 1), loc='upper left')
+        legend = ax.legend(title="", bbox_to_anchor=(1.05, 1), loc="upper left")
         # Apply same visual config to legend markers
         for handle in legend.legend_handles:
-            handle.set_alpha(stripplot_config['alpha'])
-            handle.set_sizes([stripplot_config['size']**2])
+            handle.set_alpha(stripplot_config["alpha"])
+            handle.set_sizes([stripplot_config["size"] ** 2])
 
     plt.tight_layout()
     if show:
@@ -409,8 +535,18 @@ def plot_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=Fal
     plt.close()
 
 
-def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, reverse_labels=False,
-                                sample_frac=0.2, save_location=None, dpi=600, show=False, **kwargs):
+def plot_boxplot_with_stripplot(
+    df,
+    title,
+    value_labels=None,
+    yticks=None,
+    reverse_labels=False,
+    sample_frac=0.2,
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Plots boxplots with overlaid stripplots from a DataFrame with optional saving and customization features.
 
@@ -431,7 +567,10 @@ def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, rever
     """
 
     import pandas as pd
-    from fastabc_inversion.conditional_generation.utils.plotting import plots_imports, base_config
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plots_imports,
+        base_config,
+    )
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -439,10 +578,10 @@ def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, rever
     fig, ax = plt.subplots()
 
     # Determine order for x-axis
-    order = df['labels'].unique()[::-1] if reverse_labels else None
+    order = df["labels"].unique()[::-1] if reverse_labels else None
 
     # Check if 'class' column exists for color coding
-    use_class_colors = 'class' in df.columns
+    use_class_colors = "class" in df.columns
 
     # Set up color palette for classes (0-9)
     if use_class_colors:
@@ -453,78 +592,104 @@ def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, rever
 
     # Boxplot configuration
     boxplot_config = {
-        'color': 'lightsteelblue',
-        'linewidth': 1.0,
-        'fliersize': 0,
-        'showcaps': True,
-        'boxprops': dict(alpha=0.4),
-        'order': order,
-        'width': 0.4,
-        'whis': [2.5, 97.5]
+        "color": "lightsteelblue",
+        "linewidth": 1.0,
+        "fliersize": 0,
+        "showcaps": True,
+        "boxprops": dict(alpha=0.4),
+        "order": order,
+        "width": 0.4,
+        "whis": [2.5, 97.5],
     }
 
     # Common stripplot configuration
     stripplot_config = {
-        'jitter': True,
-        'alpha': 0.6,
-        'orient': 'v',
-        'linewidth': 0,
-        'size': 3,
-        'dodge': False,
-        'order': order
+        "jitter": True,
+        "alpha": 0.6,
+        "orient": "v",
+        "linewidth": 0,
+        "size": 3,
+        "dodge": False,
+        "order": order,
     }
 
     # Check if values are lists/arrays and explode if needed
-    if isinstance(df['values'].iloc[0], (list, np.ndarray)):
-        df_exploded = df.explode('values')
-        df_exploded['values'] = pd.to_numeric(df_exploded['values'])
+    if isinstance(df["values"].iloc[0], (list, np.ndarray)):
+        df_exploded = df.explode("values")
+        df_exploded["values"] = pd.to_numeric(df_exploded["values"])
 
         # Create hue column based on original index position within each group
-        df_exploded['value_category'] = df_exploded.groupby(level=0).cumcount()
+        df_exploded["value_category"] = df_exploded.groupby(level=0).cumcount()
 
         if value_labels is not None:
-            df_exploded['value_category'] = df_exploded['value_category'].map(
-                lambda x: value_labels[x] if x < len(value_labels) else f'Value {x}'
+            df_exploded["value_category"] = df_exploded["value_category"].map(
+                lambda x: value_labels[x] if x < len(value_labels) else f"Value {x}"
             )
 
             # Use 'class' for coloring if available, otherwise use value_category
-            hue_column = 'class' if use_class_colors else 'value_category'
+            hue_column = "class" if use_class_colors else "value_category"
 
             # Plot boxplot first with ALL data
-            sns.boxplot(x='labels', y='values', data=df_exploded, ax=ax, **boxplot_config)
+            sns.boxplot(
+                x="labels", y="values", data=df_exploded, ax=ax, **boxplot_config
+            )
 
             # Sample a random subset for stripplot
             df_sampled = df_exploded.sample(frac=sample_frac, random_state=42)
 
             # Plot stripplot on top with sampled data
-            sns.stripplot(x='labels', y='values', data=df_sampled, ax=ax,
-                          hue=hue_column, palette=palette, **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df_sampled,
+                ax=ax,
+                hue=hue_column,
+                palette=palette,
+                **stripplot_config,
+            )
 
     else:
         # For the simple case (single value)
         # Plot boxplot first with ALL data
-        sns.boxplot(x='labels', y='values', data=df, ax=ax, **boxplot_config)
+        sns.boxplot(x="labels", y="values", data=df, ax=ax, **boxplot_config)
 
         # Sample a random subset for stripplot
         df_sampled = df.sample(frac=sample_frac, random_state=42)
 
         # Plot stripplot on top with sampled data
         if use_class_colors:
-            sns.stripplot(x='labels', y='values', data=df_sampled, ax=ax,
-                          hue='class', palette=palette, **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df_sampled,
+                ax=ax,
+                hue="class",
+                palette=palette,
+                **stripplot_config,
+            )
         else:
-            sns.stripplot(x='labels', y='values', data=df_sampled, ax=ax,
-                          color='#1f77b4', **stripplot_config)
+            sns.stripplot(
+                x="labels",
+                y="values",
+                data=df_sampled,
+                ax=ax,
+                color="#1f77b4",
+                **stripplot_config,
+            )
 
     ax.set_title(title)
-    ax.spines['left'].set_position(('outward', 5))
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["left"].set_position(("outward", 5))
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     # Dynamic yticks handling
     if yticks is not None:
         # Get the actual data range
-        df_values = df_exploded['values'] if isinstance(df['values'].iloc[0], (list, np.ndarray)) else df['values']
+        df_values = (
+            df_exploded["values"]
+            if isinstance(df["values"].iloc[0], (list, np.ndarray))
+            else df["values"]
+        )
         max_value = df_values.max()
         max_ytick = max(yticks)
 
@@ -540,11 +705,11 @@ def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, rever
 
     # Show legend if value_labels provided OR if using class colors
     if value_labels is not None or use_class_colors:
-        legend = ax.legend(title='', bbox_to_anchor=(1.05, 1), loc='upper left')
+        legend = ax.legend(title="", bbox_to_anchor=(1.05, 1), loc="upper left")
         # Apply same visual config to legend markers
         for handle in legend.legend_handles:
-            handle.set_alpha(stripplot_config['alpha'])
-            handle.set_sizes([stripplot_config['size'] ** 2])
+            handle.set_alpha(stripplot_config["alpha"])
+            handle.set_sizes([stripplot_config["size"] ** 2])
 
     plt.tight_layout()
     if show:
@@ -555,7 +720,9 @@ def plot_boxplot_with_stripplot(df, title, value_labels=None, yticks=None, rever
     plt.close()
 
 
-def plot_horizontal_boxplots_with_total(df, title, save_location=None, dpi=600, show=False, **kwargs):
+def plot_horizontal_boxplots_with_total(
+    df, title, save_location=None, dpi=600, show=False, **kwargs
+):
     """
     Plots horizontal boxplots for each class (0-9) plus an overall boxplot for all measurements.
 
@@ -568,7 +735,10 @@ def plot_horizontal_boxplots_with_total(df, title, save_location=None, dpi=600, 
     :return: None
     """
     import pandas as pd
-    from fastabc_inversion.conditional_generation.utils.plotting import plots_imports, base_config
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plots_imports,
+        base_config,
+    )
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -576,61 +746,61 @@ def plot_horizontal_boxplots_with_total(df, title, save_location=None, dpi=600, 
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Add vertical grid lines first (lower zorder)
-    ax.grid(axis='x', alpha=0.4, linestyle='-', linewidth=0.5, zorder=1)
+    ax.grid(axis="x", alpha=0.4, linestyle="-", linewidth=0.5, zorder=1)
     ax.set_axisbelow(True)
 
     # Prepare data with "All" category
     df_with_all = df.copy()
     df_all = df.copy()
-    df_all['labels'] = 'All'
+    df_all["labels"] = "All"
     df_combined = pd.concat([df_with_all, df_all], ignore_index=True)
 
     # Define order: 9 to 0, then All at bottom
-    order = [str(i) for i in range(9, -1, -1)] + ['All']
-    df_combined['labels'] = df_combined['labels'].astype(str)
+    order = [str(i) for i in range(9, -1, -1)] + ["All"]
+    df_combined["labels"] = df_combined["labels"].astype(str)
 
     # Set up color palette matching boxplot_with_stripplot
     colors = sns.color_palette("muted", n_colors=10)
     palette = {str(i): colors[i] for i in range(10)}
-    palette['All'] = 'lightsteelblue'
+    palette["All"] = "lightsteelblue"
 
     # Boxplot configuration with lighter grey
     boxplot_config = {
-        'linewidth': 1.2,
-        'fliersize': 0,
-        'showcaps': True,
-        'boxprops': dict(alpha=0.7, edgecolor='grey'),
-        'whiskerprops': dict(color='grey'),
-        'capprops': dict(color='grey'),
-        'medianprops': dict(color='grey'),
-        'order': order,
-        'orient': 'h',
-        'whis': [2.5, 97.5],
-        'palette': palette,
-        'zorder': 2
+        "linewidth": 1.2,
+        "fliersize": 0,
+        "showcaps": True,
+        "boxprops": dict(alpha=0.7, edgecolor="grey"),
+        "whiskerprops": dict(color="grey"),
+        "capprops": dict(color="grey"),
+        "medianprops": dict(color="grey"),
+        "order": order,
+        "orient": "h",
+        "whis": [2.5, 97.5],
+        "palette": palette,
+        "zorder": 2,
     }
 
     # Create horizontal boxplot
-    sns.boxplot(y='labels', x='values', data=df_combined, ax=ax, **boxplot_config)
+    sns.boxplot(y="labels", x="values", data=df_combined, ax=ax, **boxplot_config)
 
     # Add diamond markers for min/max values with smaller size
     for i, label in enumerate(order):
-        label_data = df_combined[df_combined['labels'] == label]['values']
+        label_data = df_combined[df_combined["labels"] == label]["values"]
         min_val = label_data.min()
         max_val = label_data.max()
-        ax.scatter([min_val, max_val], [i, i], marker='D', s=10, color='grey', zorder=3)
+        ax.scatter([min_val, max_val], [i, i], marker="D", s=10, color="grey", zorder=3)
 
     # Set x-axis to data range
-    x_min = df['values'].min()
-    x_max = df['values'].max()
+    x_min = df["values"].min()
+    x_max = df["values"].max()
     x_margin = (x_max - x_min) * 0.05
     ax.set_xlim(x_min - x_margin, x_max + x_margin)
 
     ax.set_title(title)
-    ax.set_ylabel('Class')
-    ax.set_xlabel('Measurement')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.set_ylabel("Class")
+    ax.set_xlabel("Measurement")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     plt.tight_layout()
     if show:
@@ -641,7 +811,15 @@ def plot_horizontal_boxplots_with_total(df, title, save_location=None, dpi=600, 
     plt.close()
 
 
-def plot_class_proportions_stacked(df, threshold_limit=None, title=None, save_location=None, dpi=600, show=False, **kwargs):
+def plot_class_proportions_stacked(
+    df,
+    threshold_limit=None,
+    title=None,
+    save_location=None,
+    dpi=600,
+    show=False,
+    **kwargs,
+):
     """
     Plots stacked bar chart showing class proportions at different labels/thresholds.
 
@@ -653,21 +831,28 @@ def plot_class_proportions_stacked(df, threshold_limit=None, title=None, save_lo
     :param show: If True, displays the plot
     :param kwargs: Additional keyword arguments for customizing the plot
     """
-    from fastabc_inversion.conditional_generation.utils.plotting import plots_imports, base_config
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plots_imports,
+        base_config,
+    )
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
 
     # Filter data by threshold limit if provided
     if threshold_limit is not None:
-        df = df[df['labels'] <= threshold_limit]
+        df = df[df["labels"] <= threshold_limit]
 
     # Count occurrences of each class at each threshold
-    counts = df.groupby(['labels', 'values']).size().reset_index(name='count')
+    counts = df.groupby(["labels", "values"]).size().reset_index(name="count")
 
     # Pivot data for stacking
-    pivot_df = counts.pivot_table(index='labels', columns='values', values='count', fill_value=0)
-    pivot_df = pivot_df.div(pivot_df.sum(axis=1), axis=0) * 100  # Convert to percentages
+    pivot_df = counts.pivot_table(
+        index="labels", columns="values", values="count", fill_value=0
+    )
+    pivot_df = (
+        pivot_df.div(pivot_df.sum(axis=1), axis=0) * 100
+    )  # Convert to percentages
 
     # Reverse the order of labels (highest to lowest)
     pivot_df = pivot_df.iloc[::-1]
@@ -677,21 +862,25 @@ def plot_class_proportions_stacked(df, threshold_limit=None, title=None, save_lo
 
     # Calculate dynamic bar width based on number of labels (narrower bars, avoid jamming)
     num_labels = len(pivot_df)
-    bar_width = max(0.3, min(0.7, 5.0 / num_labels))  # Between 0.3 and 0.7, scaled by count
+    bar_width = max(
+        0.3, min(0.7, 5.0 / num_labels)
+    )  # Between 0.3 and 0.7, scaled by count
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    pivot_df.plot(kind='bar', stacked=True, ax=ax, color=colors, width=bar_width, alpha=0.6)
+    pivot_df.plot(
+        kind="bar", stacked=True, ax=ax, color=colors, width=bar_width, alpha=0.6
+    )
 
-    ax.set_ylabel('Proportion (%)')
-    ax.set_xlabel('Threshold')
-    ax.set_title(title if title else 'Class Proportions at Different Thresholds')
-    ax.legend(title='Class', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=1)
+    ax.set_ylabel("Proportion (%)")
+    ax.set_xlabel("Threshold")
+    ax.set_title(title if title else "Class Proportions at Different Thresholds")
+    ax.legend(title="Class", bbox_to_anchor=(1.05, 1), loc="upper left", ncol=1)
     ax.yaxis.set_major_formatter(PercentFormatter())
 
     # Match visual config from plot_boxplot_with_stripplot
-    ax.spines['left'].set_position(('outward', 5))
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["left"].set_position(("outward", 5))
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     plt.xticks(rotation=0)
     plt.tight_layout()
@@ -702,13 +891,3 @@ def plot_class_proportions_stacked(df, threshold_limit=None, title=None, save_lo
         plt.savefig(save_location, dpi=dpi, bbox_inches="tight")
 
     plt.close()
-
-
-
-
-
-
-
-
-
-

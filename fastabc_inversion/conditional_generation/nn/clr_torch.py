@@ -7,6 +7,7 @@ This module defines a CLR class that can be used as a layer in neural networks.
 import torch
 import torch.nn as nn
 
+
 class CLR(nn.Module):
     def __init__(self, epsilon=1e-8):
         super().__init__()
@@ -37,13 +38,15 @@ class CLR(nn.Module):
 
         return clr_vec
 
+
 # test code
 if __name__ == "__main__":
     clr_layer = CLR()
 
     # Test with a batch of compositional vectors
-    compositional_data = torch.tensor([[0.0, 0.0, 1.0],
-                                       [0.1, 0.1, 0.8]], dtype=torch.float32)
+    compositional_data = torch.tensor(
+        [[0.0, 0.0, 1.0], [0.1, 0.1, 0.8]], dtype=torch.float32
+    )
 
     clr_output = clr_layer(compositional_data)
     print("CLR Output:\n", clr_output)

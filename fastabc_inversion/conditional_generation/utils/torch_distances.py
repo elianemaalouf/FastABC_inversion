@@ -4,7 +4,8 @@ Some commonly used distance/error functions
 
 import torch
 
-def lpp_torch(x, y, p, keepdim = False):
+
+def lpp_torch(x, y, p, keepdim=False):
     """
     Compute the lp, to the power p, distance between two tensors of same shape.
     Tensors must be on the same device and are expected
@@ -28,6 +29,7 @@ def lpp_torch(x, y, p, keepdim = False):
 
     return torch.sum(torch.abs(x - y) ** p, dim=1, keepdim=keepdim)
 
+
 def lp_torch(x, y, p=2, keepdim=False):
     """
     Compute the lp distance between two tensors of same shape. Tensors must be on the same device and are expected
@@ -38,7 +40,8 @@ def lp_torch(x, y, p=2, keepdim=False):
     :param keepdim: give the output the same shape as x and y
     :return: lp distance between x and y
     """
-    return lpp_torch(x=x, y=y, p=p, keepdim=keepdim)**(1 / p)
+    return lpp_torch(x=x, y=y, p=p, keepdim=keepdim) ** (1 / p)
+
 
 def mse_torch(x, y, p=2, keepdim=False):
     """
@@ -61,8 +64,8 @@ def mse_torch(x, y, p=2, keepdim=False):
         y = y.to(x.device)
 
     dim = x.shape[1]
-    return lpp_torch(x=x, y=y, p=p, keepdim=keepdim)/dim
-    #return torch.mean((x - y) ** 2, dim=1, keepdim=keepdim)
+    return lpp_torch(x=x, y=y, p=p, keepdim=keepdim) / dim
+    # return torch.mean((x - y) ** 2, dim=1, keepdim=keepdim)
 
 
 def rmse_torch(x, y, keepdim=False):
@@ -75,6 +78,7 @@ def rmse_torch(x, y, keepdim=False):
     :return: root mean squared error between x and y
     """
     return torch.sqrt(mse_torch(x, y, p=2, keepdim=keepdim))
+
 
 def cross_entropy_torch(pred, true):
     """
@@ -105,6 +109,7 @@ def cross_entropy_torch(pred, true):
 
     return -torch.sum(true * torch.log(pred), dim=1)
 
+
 def D_KL_simplex(pred, true):
     """
     Kullback-Leibler divergence between two tensors of same shape in the simplex.
@@ -120,20 +125,21 @@ def D_KL_simplex(pred, true):
 
     return cross_entropy - target_entropy
 
+
 # test
 if __name__ == "__main__":
     x = torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=torch.float32)
     y = torch.tensor([[2, 3, 4, 5], [6, 7, 8, 9]], dtype=torch.float32)
 
-    print(lpp_torch(x,y, p=1, keepdim=False))
+    print(lpp_torch(x, y, p=1, keepdim=False))
     print(lp_torch(x, y, p=1))
     print(mse_torch(x, y, p=1))
     print(rmse_torch(x, y))
 
     x_prob = torch.tensor([[0.1, 0.9, 0.0], [0.8, 0.1, 0.1]], dtype=torch.float32)
     y_prob = torch.tensor([[0, 1, 0], [1, 0, 0]], dtype=torch.float32)
-    print(cross_entropy_torch(x_prob, y_prob)) # cross entropy
-    print(cross_entropy_torch(y_prob, y_prob)) # target entropy
+    print(cross_entropy_torch(x_prob, y_prob))  # cross entropy
+    print(cross_entropy_torch(y_prob, y_prob))  # target entropy
 
     # test KL divergence
     print(D_KL_simplex(x_prob, y_prob))

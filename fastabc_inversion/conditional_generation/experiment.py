@@ -17,11 +17,14 @@ from torch.utils.tensorboard import SummaryWriter
 import torchinfo
 import torch.optim as optim
 from torch.optim import lr_scheduler
-import fastabc_inversion.utils.sinkhorn.sinkhorn_pointcloud as spc
-from fastabc_inversion.utils.utilities import norm_fn_selector
+import fastabc_inversion.conditional_generation.sinkhorn.sinkhorn_pointcloud as spc
+from fastabc_inversion.conditional_generation.utils.utilities import norm_fn_selector
 from fastabc_inversion.conditional_generation.nn.clr_torch import CLR
 
-def inspect_data(dataloader, random_samples=False, grid_size=5, num_batch_to_inspect=1, **kwargs):
+
+def inspect_data(
+    dataloader, random_samples=False, grid_size=5, num_batch_to_inspect=1, **kwargs
+):
     """
     Inspect a dataloader by printing some statistics and displaying some samples
     dataloader: PyTorch DataLoader object
@@ -30,7 +33,9 @@ def inspect_data(dataloader, random_samples=False, grid_size=5, num_batch_to_ins
     num_batch_to_inspect: number of batches to inspect
     """
     # get data from num_batch_to_inspect batches
-    from fastabc_inversion.conditional_generation.utils.plotting import plot_samples_inspections
+    from fastabc_inversion.conditional_generation.utils.plotting import (
+        plot_samples_inspections,
+    )
 
     images = []
     labels = []
@@ -53,10 +58,28 @@ def inspect_data(dataloader, random_samples=False, grid_size=5, num_batch_to_ins
     if labels.ndim > 1 and labels.shape[1] > 1:
         labels = torch.argmax(labels, dim=1)
 
-    plot_samples_inspections(images = images, labels= labels, random_samples = random_samples, grid_size=grid_size, **kwargs)
+    plot_samples_inspections(
+        images=images,
+        labels=labels,
+        random_samples=random_samples,
+        grid_size=grid_size,
+        **kwargs,
+    )
 
-def jsae_loss_fn(original_data, reconstructed_data, data_codes, latent_vector, sink_lambda,
-                 norm_fn_x_dict, norm_fn_y_dict, sinkhorn_params, device, cx_weight = 1.0, cy_weight = 1.0):
+
+def jsae_loss_fn(
+    original_data,
+    reconstructed_data,
+    data_codes,
+    latent_vector,
+    sink_lambda,
+    norm_fn_x_dict,
+    norm_fn_y_dict,
+    sinkhorn_params,
+    device,
+    cx_weight=1.0,
+    cy_weight=1.0,
+):
     """
     Computes the JSAE loss function, which includes reconstruction loss,
     and latent distribution loss combined with a scaling factor.
@@ -104,36 +127,39 @@ def jsae_loss_fn(original_data, reconstructed_data, data_codes, latent_vector, s
 
     # Reconstruction loss
     cx_batch = torch.mean(
-        norm_fn_x_dict['fn'](
+        norm_fn_x_dict["fn"](
             x_batch,
             recon_x,
-            p= norm_fn_x_dict['p'],
+            p=norm_fn_x_dict["p"],
         )
     )
     cy_batch = torch.mean(
-        norm_fn_y_dict['fn'](
+        norm_fn_y_dict["fn"](
             y_batch,
             recon_y,
-            p= norm_fn_y_dict['p'],
+            p=norm_fn_y_dict["p"],
         )
     )
 
-    reconst_cost_batch = cx_batch * cx_weight +  cy_batch * cy_weight
+    reconst_cost_batch = cx_batch * cx_weight + cy_batch * cy_weight
 
     # Latent distribution loss
     latent_dist_batch = spc.sinkhorn_normalized(
         latent_vector,
         data_codes,
-        sinkhorn_params['epsilon'],
+        sinkhorn_params["epsilon"],
         batch_size,
         sinkhorn_params["niter"],
         sinkhorn_params["p"],
-        device=device
+        device=device,
     )
 
-    model_loss_batch = (reconst_cost_batch + sink_lambda * latent_dist_batch) * 2 ** (sinkhorn_params["p"] - 1)
+    model_loss_batch = (reconst_cost_batch + sink_lambda * latent_dist_batch) * 2 ** (
+        sinkhorn_params["p"] - 1
+    )
 
     return model_loss_batch, reconst_cost_batch, latent_dist_batch, cx_batch, cy_batch
+
 
 class Experiment(ABC):
     map_ERADist_to_torch_dist = {
@@ -142,8 +168,20 @@ class Experiment(ABC):
         "uniform": dists.Uniform,
     }
 
-    def __init__(self, seed, data_dir, experiment_rootdir, name, image_size, dim_x, dim_y, latent_dist_name,
-                    latent_dist_params_list, use_cuda=True, gpu_id=0):
+    def __init__(
+        self,
+        seed,
+        data_dir,
+        experiment_rootdir,
+        name,
+        image_size,
+        dim_x,
+        dim_y,
+        latent_dist_name,
+        latent_dist_params_list,
+        use_cuda=True,
+        gpu_id=0,
+    ):
         """
         Initialize the experiment
         seed: random seed for reproducibility
@@ -182,9 +220,7 @@ class Experiment(ABC):
             random.choices(string.ascii_uppercase + string.digits, k=5)
         )
 
-        self.name = (
-            f"{name}_{self.run_id}"
-        )
+        self.name = f"{name}_{self.run_id}"
 
         # device
 
@@ -227,13 +263,17 @@ class Experiment(ABC):
         self.image_size = image_size
         self.dim_x = image_size * image_size if dim_x is None else dim_x
         self.dim_y = dim_y
-        self.input_dim = self.dim_x + self.dim_y if self.dim_y is not None and self.dim_x is not None else None
+        self.input_dim = (
+            self.dim_x + self.dim_y
+            if self.dim_y is not None and self.dim_x is not None
+            else None
+        )
 
         self.model_selector = None
         self.model_log_ref = None
-        self.model = None # full model
-        self.netD = None # encoder
-        self.netG = None # decoder / generator
+        self.model = None  # full model
+        self.netD = None  # encoder
+        self.netG = None  # decoder / generator
         self.nn_params = None
         self.model_training_params = None
         self.torch_clr_transformer = CLR()
@@ -264,20 +304,21 @@ class Experiment(ABC):
         self.g_fun = None
         self.u2x = None
 
-
     def config_tensorboard_logging(self):
         """
         Configure tensorboard logging.
         """
-        self.tensorboard_logging_dir = f"{self.tensorboard_logging_dir_root}/{self.name}"
+        self.tensorboard_logging_dir = (
+            f"{self.tensorboard_logging_dir_root}/{self.name}"
+        )
         os.makedirs(self.tensorboard_logging_dir, exist_ok=True)
         self.tsb_logger = SummaryWriter(log_dir=self.tensorboard_logging_dir)
 
     def __getstate__(self):
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
-        if 'tsb_logger' in state:
-            del state['tsb_logger']
+        if "tsb_logger" in state:
+            del state["tsb_logger"]
         return state
 
     def __setstate__(self, state):
@@ -292,14 +333,21 @@ class Experiment(ABC):
         checkpoint_dict: dictionary containing the checkpoint data to be saved. Should contain at least the epoch number under the key 'epoch'.
         save_full_experiment: if True, save the full experiment object using pickle
         """
-        epoch = checkpoint_dict.get('epoch', None)
+        epoch = checkpoint_dict.get("epoch", None)
         if epoch is None:
-            raise ValueError("checkpoint_dict must contain the epoch number under the key 'epoch'")
+            raise ValueError(
+                "checkpoint_dict must contain the epoch number under the key 'epoch'"
+            )
 
-        torch.save(checkpoint_dict, f"{self.model_training_dir}/models/checkpoint_epoch_{epoch}.pth")
+        torch.save(
+            checkpoint_dict,
+            f"{self.model_training_dir}/models/checkpoint_epoch_{epoch}.pth",
+        )
 
         if save_full_experiment:
-            with open(f"{self.model_training_dir}/models/experiment_epoch_{epoch}.pkl", "wb") as f:
+            with open(
+                f"{self.model_training_dir}/models/experiment_epoch_{epoch}.pkl", "wb"
+            ) as f:
                 pickle.dump(self, f)
 
     def load_checkpoint(self, checkpoint_path):
@@ -313,7 +361,7 @@ class Experiment(ABC):
         """
         Save the model summary to a file in the model training directory
         """
-        result = torchinfo.summary(self.model, input_size= input_dim, device=self.device)
+        result = torchinfo.summary(self.model, input_size=input_dim, device=self.device)
 
         with open(f"{self.model_training_dir}/model_summary.txt", "a+") as f:
             f.write(str(result))
@@ -324,29 +372,29 @@ class Experiment(ABC):
         """
         if config_dict is None:
             config_dict = {
-                'name': self.name,
-                'run_id': self.run_id,
-                'seed': self.seed,
-                'data_dir': self.data_dir,
-                'experiment_rootdir': self.experiment_rootdir,
-                'image_size': self.image_size,
-                'dim_x': self.dim_x,
-                'dim_y': self.dim_y,
-                'latent_dim': self.latent_dim,
-                'latent distribution name': self.latent_dist_name,
-                'latent distribution parameters': self.latent_dist_params_list,
-                'Image decoder network': self.model_selector,
-                'load pretrained model': self.load_pretrained_model,
-                'pretrained model netD state dict': self.pretrained_model_netD_state_dict,
-                'pretrained model netG state dict': self.pretrained_model_netG_state_dict,
-                'device': self.device,
-                'optimizer': self.optimizer,
-                'optimizer lr scheduler': self.optim_lr_scheduler,
-                'sinkhorn parameters': self.sinkhorn_params,
-                'sinkhorn lambda scheduling parameters': self.sinkhorn_lambda_scheduling_params,
-                'model training parameters': self.model_training_params,
-                'metric spaces norms parameters': self.norms_params,
-                'best training epoch': self.best_training_epoch,
+                "name": self.name,
+                "run_id": self.run_id,
+                "seed": self.seed,
+                "data_dir": self.data_dir,
+                "experiment_rootdir": self.experiment_rootdir,
+                "image_size": self.image_size,
+                "dim_x": self.dim_x,
+                "dim_y": self.dim_y,
+                "latent_dim": self.latent_dim,
+                "latent distribution name": self.latent_dist_name,
+                "latent distribution parameters": self.latent_dist_params_list,
+                "Image decoder network": self.model_selector,
+                "load pretrained model": self.load_pretrained_model,
+                "pretrained model netD state dict": self.pretrained_model_netD_state_dict,
+                "pretrained model netG state dict": self.pretrained_model_netG_state_dict,
+                "device": self.device,
+                "optimizer": self.optimizer,
+                "optimizer lr scheduler": self.optim_lr_scheduler,
+                "sinkhorn parameters": self.sinkhorn_params,
+                "sinkhorn lambda scheduling parameters": self.sinkhorn_lambda_scheduling_params,
+                "model training parameters": self.model_training_params,
+                "metric spaces norms parameters": self.norms_params,
+                "best training epoch": self.best_training_epoch,
             }
 
         with open(f"{self.experiment_dir}/experiment_config.txt", "w") as f:
@@ -383,13 +431,13 @@ class Experiment(ABC):
         self.model.netG.load_state_dict(self.pretrained_model_netG_state_dict)
 
     def prep_model(
-            self,
-            model_selector,
-            nn_params,
-            load_pretrained_model,
-            transfer_netG_state_dict,
-            transfer_netD_state_dict,
-            model_log_ref
+        self,
+        model_selector,
+        nn_params,
+        load_pretrained_model,
+        transfer_netG_state_dict,
+        transfer_netD_state_dict,
+        model_log_ref,
     ):
         """
         Set the neural network and its training configurations.
@@ -414,7 +462,9 @@ class Experiment(ABC):
         self.model.to(self.device)
         print(f"Model was created and sent to device {self.device}...")
 
-    def set_sinkhorn_params(self, sinkhorn_params, sinkhorn_lambda_scheduling_params, override = False):
+    def set_sinkhorn_params(
+        self, sinkhorn_params, sinkhorn_lambda_scheduling_params, override=False
+    ):
         """
         Set the sinkhorn parameters.
         :param sinkhorn_params: dictionary of sinkhorn parameters.
@@ -427,9 +477,11 @@ class Experiment(ABC):
 
         if sinkhorn_lambda_scheduling_params is not None:
             if self.sinkhorn_lambda_scheduling_params is None or override:
-                self.sinkhorn_lambda_scheduling_params = sinkhorn_lambda_scheduling_params
+                self.sinkhorn_lambda_scheduling_params = (
+                    sinkhorn_lambda_scheduling_params
+                )
 
-    def prep_model_optimizer(self, lr_scheduling, optim_params, override = False):
+    def prep_model_optimizer(self, lr_scheduling, optim_params, override=False):
         """
         Configure the model optimizer. Uses Adam optimizer.
         :param lr_scheduling: whether to use learning rate scheduling
@@ -437,7 +489,7 @@ class Experiment(ABC):
         :param override: whether to override the existing optimizer if it is already set
         :return:
         """
-        _AVAILABLE_LR_SCHEDULERS = ['on_plateau', 'one_cycle']
+        _AVAILABLE_LR_SCHEDULERS = ["on_plateau", "one_cycle"]
         print("Preparing model Adam optimizer ...")
         self.lr_scheduling = lr_scheduling
 
@@ -450,7 +502,7 @@ class Experiment(ABC):
                 )
                 self.optim_params = optim_params
             if lr_scheduling:
-                if optim_params["lr_scheduler"]=="on_plateau":
+                if optim_params["lr_scheduler"] == "on_plateau":
                     self.optim_lr_scheduler = lr_scheduler.ReduceLROnPlateau(
                         optimizer=self.optimizer,
                         mode="min",
@@ -461,30 +513,40 @@ class Experiment(ABC):
                         verbose=optim_params["verbose"],
                         threshold=optim_params["lr_threshold"],
                     )
-                elif optim_params["lr_scheduler"]=="one_cycle":
+                elif optim_params["lr_scheduler"] == "one_cycle":
                     self.optim_lr_scheduler = lr_scheduler.OneCycleLR(
                         optimizer=self.optimizer,
                         max_lr=optim_params["lr"],
-                        epochs = optim_params["epochs"],
-                        steps_per_epoch = optim_params["steps_per_epoch"],
+                        epochs=optim_params["epochs"],
+                        steps_per_epoch=optim_params["steps_per_epoch"],
                         verbose=optim_params["verbose"],
                     )
                 else:
-                    raise ValueError(f"Invalid learning rate scheduler: {optim_params['lr_scheduler']}. Choose"
-                                     f"one of {_AVAILABLE_LR_SCHEDULERS}.")
+                    raise ValueError(
+                        f"Invalid learning rate scheduler: {optim_params['lr_scheduler']}. Choose"
+                        f"one of {_AVAILABLE_LR_SCHEDULERS}."
+                    )
         else:
             raise ValueError(
                 "Optimizer parameters are not provided. "
                 "Provide at least optim_params['lr'] parameter."
             )
 
-    def lambda_sinkhorn_scheduling(self, current_lambda, sink_lambda_sched_factor, running_recon_loss, running_latent_dist_loss, epoch,
-                                   prec_nugget = 1e-10):
-
-        cycle_steps = len(self.train_loader) # number of batches per epoch
+    def lambda_sinkhorn_scheduling(
+        self,
+        current_lambda,
+        sink_lambda_sched_factor,
+        running_recon_loss,
+        running_latent_dist_loss,
+        epoch,
+        prec_nugget=1e-10,
+    ):
+        cycle_steps = len(self.train_loader)  # number of batches per epoch
 
         p_sk = self.sinkhorn_params["p"]
-        sink_lambda_sched_epoch = self.sinkhorn_lambda_scheduling_params["sink_lambda_scheduler_epoch"]
+        sink_lambda_sched_epoch = self.sinkhorn_lambda_scheduling_params[
+            "sink_lambda_scheduler_epoch"
+        ]
 
         sink_lambda = current_lambda
 
@@ -492,7 +554,9 @@ class Experiment(ABC):
             old_sink_lambda = current_lambda
 
             if sink_lambda_sched_factor == -1:
-                sink_lambda = (running_recon_loss / cycle_steps) // ((running_latent_dist_loss / cycle_steps) + prec_nugget)  # don't use validation data here (risk of contaminating the training with the validation set)
+                sink_lambda = (running_recon_loss / cycle_steps) // (
+                    (running_latent_dist_loss / cycle_steps) + prec_nugget
+                )  # don't use validation data here (risk of contaminating the training with the validation set)
                 if sink_lambda == 0:
                     sink_lambda = 1
 
@@ -517,7 +581,9 @@ class Experiment(ABC):
         :return: Inflation parameter
         """
 
-        if metric_2 > 0 and metric_2 > 1.0: # avoid division by zero and avoid over-inflating when metric_2 is small
+        if (
+            metric_2 > 0 and metric_2 > 1.0
+        ):  # avoid division by zero and avoid over-inflating when metric_2 is small
             inflation_param = (metric_1 / metric_2) * inflation_factor
         else:
             inflation_param = 1.0
@@ -540,7 +606,13 @@ class Experiment(ABC):
         """
         self.model.eval()
 
-        val_total_loss , val_recon_loss, val_latent_dist_loss, cx, cy = 0.0, 0.0, 0.0, 0.0, 0.0
+        val_total_loss, val_recon_loss, val_latent_dist_loss, cx, cy = (
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        )
 
         with torch.no_grad():
             for i, (x_batch, y_batch) in enumerate(self.val_loader):
@@ -549,31 +621,52 @@ class Experiment(ABC):
                 # 1. Move data to the appropriate device
                 x_batch = x_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
-                #data_batch = torch.cat((x_batch, y_batch), 1)
+                # data_batch = torch.cat((x_batch, y_batch), 1)
 
                 # 2. Forward pass: Compute model output
                 data_codes_batch = self.model.netD(x_batch, y_batch)
 
                 latent_vector_batch = (
                     self.latent_dist(
-                        torch.tensor(self.latent_dist_params_list[0], dtype=torch.float32),
-                        torch.tensor(self.latent_dist_params_list[1], dtype=torch.float32),
-                    ).sample((b_size, self.latent_dim)).to(self.device))
+                        torch.tensor(
+                            self.latent_dist_params_list[0], dtype=torch.float32
+                        ),
+                        torch.tensor(
+                            self.latent_dist_params_list[1], dtype=torch.float32
+                        ),
+                    )
+                    .sample((b_size, self.latent_dim))
+                    .to(self.device)
+                )
 
-                reconstrcuted_x_batch, reconstrcuted_y_batch = self.model.netG(data_codes_batch)
+                reconstrcuted_x_batch, reconstrcuted_y_batch = self.model.netG(
+                    data_codes_batch
+                )
 
                 # 3. CLR transform y_batch and reconstrcuted_y_batch
                 y_batch_clr = self.torch_clr_transformer(y_batch)
-                reconstrcuted_y_batch_clr = self.torch_clr_transformer(reconstrcuted_y_batch)
+                reconstrcuted_y_batch_clr = self.torch_clr_transformer(
+                    reconstrcuted_y_batch
+                )
 
                 # 4. Compute loss
-                model_loss_batch, reconst_cost_batch, latent_dist_batch, cx_batch, cy_batch = jsae_loss_fn([x_batch, y_batch_clr],
-                                                        [reconstrcuted_x_batch, reconstrcuted_y_batch_clr],
-                                                                         data_codes_batch, latent_vector_batch,
-                                                                         sink_lambda,
-                                                                         norm_fn_x_dict, norm_fn_y_dict,
-                                                                         self.sinkhorn_params,
-                                                                         self.device)
+                (
+                    model_loss_batch,
+                    reconst_cost_batch,
+                    latent_dist_batch,
+                    cx_batch,
+                    cy_batch,
+                ) = jsae_loss_fn(
+                    [x_batch, y_batch_clr],
+                    [reconstrcuted_x_batch, reconstrcuted_y_batch_clr],
+                    data_codes_batch,
+                    latent_vector_batch,
+                    sink_lambda,
+                    norm_fn_x_dict,
+                    norm_fn_y_dict,
+                    self.sinkhorn_params,
+                    self.device,
+                )
 
                 val_total_loss += model_loss_batch.item()
                 val_recon_loss += reconst_cost_batch.item()
@@ -584,30 +677,47 @@ class Experiment(ABC):
             total_batches = i + 1
 
         # return averages
-        return (val_total_loss /total_batches, val_recon_loss / total_batches, val_latent_dist_loss / total_batches,
-                cx / total_batches, cy / total_batches)
+        return (
+            val_total_loss / total_batches,
+            val_recon_loss / total_batches,
+            val_latent_dist_loss / total_batches,
+            cx / total_batches,
+            cy / total_batches,
+        )
 
-    def train_model(self, model_selector, nn_params, lr_scheduling, optim_params, sinkhorn_params,
-            sinkhorn_lambda_scheduling_params, model_training_params, norms_params,
-            model_log_ref, continue_training_from_checkpoint):
+    def train_model(
+        self,
+        model_selector,
+        nn_params,
+        lr_scheduling,
+        optim_params,
+        sinkhorn_params,
+        sinkhorn_lambda_scheduling_params,
+        model_training_params,
+        norms_params,
+        model_log_ref,
+        continue_training_from_checkpoint,
+    ):
         """
         Train the model
         """
 
         if self.model is None:
             self.prep_model(
-                model_selector = model_selector,
-                nn_params = nn_params,
-                load_pretrained_model = False,
-                transfer_netG_state_dict = None,
-                transfer_netD_state_dict = None,
-                model_log_ref = model_log_ref
+                model_selector=model_selector,
+                nn_params=nn_params,
+                load_pretrained_model=False,
+                transfer_netG_state_dict=None,
+                transfer_netD_state_dict=None,
+                model_log_ref=model_log_ref,
             )
 
         if self.optimizer is None:
             self.prep_model_optimizer(lr_scheduling, optim_params)
 
-        self.set_sinkhorn_params(sinkhorn_params, sinkhorn_lambda_scheduling_params, override=True)
+        self.set_sinkhorn_params(
+            sinkhorn_params, sinkhorn_lambda_scheduling_params, override=True
+        )
 
         self.model_training_params = model_training_params
         self.norms_params = norms_params
@@ -619,24 +729,29 @@ class Experiment(ABC):
             checkpoint = self.load_checkpoint(continue_training_from_checkpoint)
 
             self.load_model_weights(
-                {"netD": checkpoint['netD_state_dict'], "netG": checkpoint['netG_state_dict']}
+                {
+                    "netD": checkpoint["netD_state_dict"],
+                    "netG": checkpoint["netG_state_dict"],
+                }
             )
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-            epoch_offset = checkpoint['total_training_epochs']
-            self.train_history = checkpoint['train_history']
+            epoch_offset = checkpoint["total_training_epochs"]
+            self.train_history = checkpoint["train_history"]
 
             if sinkhorn_params is None:
-                self.sinkhorn_params = checkpoint['sinkhorn_params']
+                self.sinkhorn_params = checkpoint["sinkhorn_params"]
 
             if sinkhorn_lambda_scheduling_params is None:
-                self.sinkhorn_lambda_scheduling_params = checkpoint['sinkhorn_lambda_scheduling_params']
+                self.sinkhorn_lambda_scheduling_params = checkpoint[
+                    "sinkhorn_lambda_scheduling_params"
+                ]
 
             if model_training_params is None:
-                self.model_training_params = checkpoint['model_training_params']
+                self.model_training_params = checkpoint["model_training_params"]
 
             if norms_params is None:
-                self.norms_params = checkpoint['norms_params']
+                self.norms_params = checkpoint["norms_params"]
 
             print(f"Continuing training from checkpoint at epoch {epoch_offset}")
 
@@ -644,17 +759,29 @@ class Experiment(ABC):
             best_val_metric = train_hist["best_val_metric"]
         else:
             train_hist = {}
-            train_hist["train_reconst"] = []  # reconstruction part of the loss on training data
+            train_hist[
+                "train_reconst"
+            ] = []  # reconstruction part of the loss on training data
             train_hist["train_loss"] = []  # total loss on training data
-            train_hist["train_latent_dist"] = []  # distribution distance in latent space - on training data
+            train_hist[
+                "train_latent_dist"
+            ] = []  # distribution distance in latent space - on training data
             train_hist["train_cx_recon"] = []  # X reconstruction error on training data
             train_hist["train_cy_recon"] = []  # Y reconstruction error on training data
 
             train_hist["validation_loss"] = []  # total loss on validation data
-            train_hist["validation_reconst"] = []  # reconstruction part of the loss on validation data
-            train_hist["validation_latent_dist"] = []  # distribution distance in latent space - on validation data
-            train_hist["validation_cx_recon"] = []  # X reconstruction error on validation data
-            train_hist["validation_cy_recon"] = []  # Y reconstruction error on validation
+            train_hist[
+                "validation_reconst"
+            ] = []  # reconstruction part of the loss on validation data
+            train_hist[
+                "validation_latent_dist"
+            ] = []  # distribution distance in latent space - on validation data
+            train_hist[
+                "validation_cx_recon"
+            ] = []  # X reconstruction error on validation data
+            train_hist[
+                "validation_cy_recon"
+            ] = []  # Y reconstruction error on validation
 
             train_hist["per_epoch_ptimes"] = []  # per epoch training time duration
             train_hist["total_ptime"] = None  # total epochs training time
@@ -662,15 +789,16 @@ class Experiment(ABC):
             best_val_metric = float("inf")
 
         norm_fn_x = norm_fn_selector(self.norms_params["norm_fct_type_x"])
-        norm_fn_x_dict = {'fn': norm_fn_x, 'p': self.norms_params["l_norm_p_x"]}
+        norm_fn_x_dict = {"fn": norm_fn_x, "p": self.norms_params["l_norm_p_x"]}
 
         norm_fn_y = norm_fn_selector(self.norms_params["norm_fct_type_y"])
-        norm_fn_y_dict = {'fn': norm_fn_y, 'p': self.norms_params["l_norm_p_y"]}
+        norm_fn_y_dict = {"fn": norm_fn_y, "p": self.norms_params["l_norm_p_y"]}
 
         inflate_cy_recon = self.model_training_params["inflate_recon_y"]
 
         # setup plotting tools
         import fastabc_inversion.conditional_generation.utils.plotting as plot
+
         mpl, plt, make_axes_locatable, tick = plot.plots_imports()
         plot.base_config(mpl)
 
@@ -694,8 +822,14 @@ class Experiment(ABC):
         with torch.no_grad():
             self.model.eval()
             dummy_input = (
-                torch.rand(10, 1, self.image_size, self.image_size).to(self.device),# Tensor for input_images: (Batch, Channels, Height, Width)
-                torch.rand(10, self.dim_y).float().to(self.device) # Tensor for input_labels: (Batch, Features) with shape (10, 10)
+                torch.rand(10, 1, self.image_size, self.image_size).to(
+                    self.device
+                ),  # Tensor for input_images: (Batch, Channels, Height, Width)
+                torch.rand(10, self.dim_y)
+                .float()
+                .to(
+                    self.device
+                ),  # Tensor for input_labels: (Batch, Features) with shape (10, 10)
             )
             self.tsb_logger.add_graph(self.model, dummy_input)
 
@@ -704,43 +838,61 @@ class Experiment(ABC):
         start_time = time.time()  # start time of the whole training
 
         sink_lambda = self.sinkhorn_lambda_scheduling_params["sink_lambda"]
-        sink_lambda_sched_factor = self.sinkhorn_lambda_scheduling_params["sink_lambda_scheduler_factor"]
+        sink_lambda_sched_factor = self.sinkhorn_lambda_scheduling_params[
+            "sink_lambda_scheduler_factor"
+        ]
 
-        cy_weight = 1.0 if not inflate_cy_recon else self.model_training_params["inflation_param_start"]
+        cy_weight = (
+            1.0
+            if not inflate_cy_recon
+            else self.model_training_params["inflation_param_start"]
+        )
 
-        for epoch in range(self.model_training_params['nb_epochs']):
+        for epoch in range(self.model_training_params["nb_epochs"]):
             self.model.train()
 
             #### Inflation parameters ####
             if epoch > 0:
-                sink_lambda, sink_lambda_sched_factor = self.lambda_sinkhorn_scheduling(sink_lambda, sink_lambda_sched_factor,
-                                                                                    epoch_recon_loss,
-                                                                                    epoch_latent_dist_loss, epoch)
+                sink_lambda, sink_lambda_sched_factor = self.lambda_sinkhorn_scheduling(
+                    sink_lambda,
+                    sink_lambda_sched_factor,
+                    epoch_recon_loss,
+                    epoch_latent_dist_loss,
+                    epoch,
+                )
 
                 if inflate_cy_recon:
-                    cy_weight = self.inflation_parameter(avg_training_cx_recon, avg_training_cy_recon)
+                    cy_weight = self.inflation_parameter(
+                        avg_training_cx_recon, avg_training_cy_recon
+                    )
 
             ###################################
 
-            epoch_total_loss, epoch_recon_loss, epoch_latent_dist_loss, epoch_cx_recon, epoch_cy_recon = 0.0, 0.0, 0.0, 0.0, 0.0
+            (
+                epoch_total_loss,
+                epoch_recon_loss,
+                epoch_latent_dist_loss,
+                epoch_cx_recon,
+                epoch_cy_recon,
+            ) = (0.0, 0.0, 0.0, 0.0, 0.0)
 
             # choose what to store when storing a checkpoint for the whole experiment
             checkpoint_data = {
-                'epoch': epoch + epoch_offset,
-                'model_selector': self.model_selector,
-                'model_log_ref': self.model_log_ref,
-                'nn_params': self.nn_params,
-                'netD_state_dict': self.model.netD.state_dict(),
-                'netG_state_dict': self.model.netG.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'optim_params': self.optim_params,
-                'lr_scheduling': self.lr_scheduling,
-                'total_training_epochs': self.total_training_epochs,
-                'train_history': self.train_history,
-                'sinkhorn_params': self.sinkhorn_params,
-                'sinkhorn_lambda_scheduling_params': self.sinkhorn_lambda_scheduling_params,
-                'model_training_params': self.model_training_params,
-                'norms_params': self.norms_params,
+                "epoch": epoch + epoch_offset,
+                "model_selector": self.model_selector,
+                "model_log_ref": self.model_log_ref,
+                "nn_params": self.nn_params,
+                "netD_state_dict": self.model.netD.state_dict(),
+                "netG_state_dict": self.model.netG.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "optim_params": self.optim_params,
+                "lr_scheduling": self.lr_scheduling,
+                "total_training_epochs": self.total_training_epochs,
+                "train_history": self.train_history,
+                "sinkhorn_params": self.sinkhorn_params,
+                "sinkhorn_lambda_scheduling_params": self.sinkhorn_lambda_scheduling_params,
+                "model_training_params": self.model_training_params,
+                "norms_params": self.norms_params,
             }
 
             epoch_start_time = time.time()  # start time of the current epoch
@@ -751,7 +903,7 @@ class Experiment(ABC):
                 # 1. Move data to the appropriate device
                 x_batch = x_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
-                #data_batch = torch.cat((x_batch, y_batch), 1)
+                # data_batch = torch.cat((x_batch, y_batch), 1)
 
                 # 2. Zero the gradients from the previous iteration
                 self.model.zero_grad()
@@ -761,22 +913,46 @@ class Experiment(ABC):
 
                 latent_vector_batch = (
                     self.latent_dist(
-                        torch.tensor(self.latent_dist_params_list[0], dtype=torch.float32),
-                        torch.tensor(self.latent_dist_params_list[1], dtype=torch.float32),
-                    ).sample((b_size, self.latent_dim)).to(self.device))
+                        torch.tensor(
+                            self.latent_dist_params_list[0], dtype=torch.float32
+                        ),
+                        torch.tensor(
+                            self.latent_dist_params_list[1], dtype=torch.float32
+                        ),
+                    )
+                    .sample((b_size, self.latent_dim))
+                    .to(self.device)
+                )
 
-                reconstrcuted_x_batch, reconstrcuted_y_batch = self.model.netG(data_codes_batch)
+                reconstrcuted_x_batch, reconstrcuted_y_batch = self.model.netG(
+                    data_codes_batch
+                )
 
                 # 3. CLR transform y_batch and reconstrcuted_y_batch
                 y_batch_clr = self.torch_clr_transformer(y_batch)
-                reconstrcuted_y_batch_clr = self.torch_clr_transformer(reconstrcuted_y_batch)
+                reconstrcuted_y_batch_clr = self.torch_clr_transformer(
+                    reconstrcuted_y_batch
+                )
 
                 # 4. Compute loss
-                model_loss_batch, reconst_cost_batch, latent_dist_batch, cx_batch, cy_batch = jsae_loss_fn([x_batch, y_batch_clr],
-                                                        [reconstrcuted_x_batch, reconstrcuted_y_batch_clr],
-                                                                         data_codes_batch, latent_vector_batch,
-                                                                         sink_lambda, norm_fn_x_dict, norm_fn_y_dict,
-                                                                         self.sinkhorn_params, self.device, cy_weight=cy_weight)
+                (
+                    model_loss_batch,
+                    reconst_cost_batch,
+                    latent_dist_batch,
+                    cx_batch,
+                    cy_batch,
+                ) = jsae_loss_fn(
+                    [x_batch, y_batch_clr],
+                    [reconstrcuted_x_batch, reconstrcuted_y_batch_clr],
+                    data_codes_batch,
+                    latent_vector_batch,
+                    sink_lambda,
+                    norm_fn_x_dict,
+                    norm_fn_y_dict,
+                    self.sinkhorn_params,
+                    self.device,
+                    cy_weight=cy_weight,
+                )
 
                 # 5. Backward pass: Compute gradients
                 model_loss_batch.backward()
@@ -785,7 +961,9 @@ class Experiment(ABC):
                 self.optimizer.step()
 
                 if self.lr_scheduling:
-                    if self.optim_params['lr_scheduler'] == 'one_cycle': # after batch training
+                    if (
+                        self.optim_params["lr_scheduler"] == "one_cycle"
+                    ):  # after batch training
                         self.optim_lr_scheduler.step()
 
                 # 7. Update running losses
@@ -802,7 +980,6 @@ class Experiment(ABC):
             avg_training_cx_recon = epoch_cx_recon / (i + 1)
             avg_training_cy_recon = epoch_cy_recon / (i + 1)
 
-
             train_hist["train_loss"].append(avg_training_loss)
             train_hist["train_reconst"].append(avg_training_reconst)
             train_hist["train_latent_dist"].append(avg_training_latent_dist)
@@ -810,8 +987,13 @@ class Experiment(ABC):
             train_hist["train_cy_recon"].append(avg_training_cy_recon)
 
             # Run evaluation on validation set at end of every epoch
-            avg_val_loss, avg_val_reconst, avg_val_latent_dist, avg_val_cx, avg_val_cy = self.validate_model(sink_lambda,
-                                                                                       norm_fn_x_dict, norm_fn_y_dict)
+            (
+                avg_val_loss,
+                avg_val_reconst,
+                avg_val_latent_dist,
+                avg_val_cx,
+                avg_val_cy,
+            ) = self.validate_model(sink_lambda, norm_fn_x_dict, norm_fn_y_dict)
 
             train_hist["validation_loss"].append(avg_val_loss)
             train_hist["validation_reconst"].append(avg_val_reconst)
@@ -821,36 +1003,48 @@ class Experiment(ABC):
 
             # store checkpoint when improvement on validation metric is seen or every 100 epochs
             if avg_val_loss < (best_val_metric - 1e-4):
-
                 best_val_metric = avg_val_loss
                 train_hist["best_val_metric"] = best_val_metric
                 self.best_training_epoch = epoch + epoch_offset
 
                 # update experiment attributes
-                self.total_training_epochs = epoch + epoch_offset  # actual number of training epochs completed
+                self.total_training_epochs = (
+                    epoch + epoch_offset
+                )  # actual number of training epochs completed
                 self.train_history = train_hist
                 self.sinkhorn_lambda_scheduling_params["sink_lambda"] = sink_lambda
-                self.sinkhorn_lambda_scheduling_params["sink_lambda_scheduler_factor"] = sink_lambda_sched_factor
+                self.sinkhorn_lambda_scheduling_params[
+                    "sink_lambda_scheduler_factor"
+                ] = sink_lambda_sched_factor
 
                 self.save_checkpoint(checkpoint_data, save_full_experiment=True)
 
-            if not (epoch+epoch_offset) % 100:
+            if not (epoch + epoch_offset) % 100:
                 # update experiment attributes
-                self.total_training_epochs = epoch + epoch_offset  # actual number of training epochs completed
+                self.total_training_epochs = (
+                    epoch + epoch_offset
+                )  # actual number of training epochs completed
                 self.train_history = train_hist
                 self.sinkhorn_lambda_scheduling_params["sink_lambda"] = sink_lambda
-                self.sinkhorn_lambda_scheduling_params["sink_lambda_scheduler_factor"] = sink_lambda_sched_factor
+                self.sinkhorn_lambda_scheduling_params[
+                    "sink_lambda_scheduler_factor"
+                ] = sink_lambda_sched_factor
 
                 self.save_checkpoint(checkpoint_data, save_full_experiment=True)
 
-            if best_val_metric < self.model_training_params["training_stop_metric_threshold"]:
+            if (
+                best_val_metric
+                < self.model_training_params["training_stop_metric_threshold"]
+            ):
                 print(
                     f"Training finished at epoch {epoch + epoch_offset}, reaching loss of {best_val_metric:.5f}"
                 )
                 break
 
             if self.lr_scheduling:
-                if self.optim_params['lr_scheduler'] == 'on_plateau': # after validation evaluation
+                if (
+                    self.optim_params["lr_scheduler"] == "on_plateau"
+                ):  # after validation evaluation
                     self.optim_lr_scheduler.step(avg_val_loss)
 
             epoch_end_time = (
@@ -869,23 +1063,43 @@ class Experiment(ABC):
             )
 
             # log to tensorboard
-            self.tsb_logger.add_scalar("Loss/train", avg_training_loss, epoch + epoch_offset)
+            self.tsb_logger.add_scalar(
+                "Loss/train", avg_training_loss, epoch + epoch_offset
+            )
             self.tsb_logger.add_scalar("Loss/val", avg_val_loss, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/train", avg_training_reconst, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/val", avg_val_reconst, epoch + epoch_offset)
+            self.tsb_logger.add_scalar(
+                "Recons/train", avg_training_reconst, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Recons/val", avg_val_reconst, epoch + epoch_offset
+            )
             self.tsb_logger.add_scalar(
                 "Latent distance/train", avg_training_latent_dist, epoch + epoch_offset
             )
-            self.tsb_logger.add_scalar("Latent distance/val", avg_val_latent_dist, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/Cx_recon_train", avg_training_cx_recon, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/Cx_recon_val", avg_val_cx, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/Cy_recon_train", avg_training_cy_recon, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Recons/Cy_recon_val", avg_val_cy, epoch + epoch_offset)
-            self.tsb_logger.add_scalar("Sinkhorn_lambda", sink_lambda, epoch + epoch_offset)
+            self.tsb_logger.add_scalar(
+                "Latent distance/val", avg_val_latent_dist, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Recons/Cx_recon_train", avg_training_cx_recon, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Recons/Cx_recon_val", avg_val_cx, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Recons/Cy_recon_train", avg_training_cy_recon, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Recons/Cy_recon_val", avg_val_cy, epoch + epoch_offset
+            )
+            self.tsb_logger.add_scalar(
+                "Sinkhorn_lambda", sink_lambda, epoch + epoch_offset
+            )
             # log the current learning rate if lr scheduling is used
             if self.lr_scheduling:
-                current_lr = self.optimizer.param_groups[0]['lr']
-                self.tsb_logger.add_scalar("Learning_rate", current_lr, epoch + epoch_offset)
+                current_lr = self.optimizer.param_groups[0]["lr"]
+                self.tsb_logger.add_scalar(
+                    "Learning_rate", current_lr, epoch + epoch_offset
+                )
 
             # check fixed noise results
             self.model.eval()
@@ -895,10 +1109,12 @@ class Experiment(ABC):
 
                 fig, axes = plt.subplots(1, 1)
 
-                axes.imshow(fixed_x.squeeze(), cmap='gray')
+                axes.imshow(fixed_x.squeeze(), cmap="gray")
                 axes.set_title(f"Label: {fixed_y.numpy()}")
-                axes.axis('off')
-                plt.savefig(f"{self.model_training_dir}/training_plots/model_epoch_{epoch+epoch_offset}.png")
+                axes.axis("off")
+                plt.savefig(
+                    f"{self.model_training_dir}/training_plots/model_epoch_{epoch+epoch_offset}.png"
+                )
                 plt.close()
 
         end_time = time.time()  # end time of the whole training
@@ -925,10 +1141,14 @@ class Experiment(ABC):
         train_hist["best_val_metric"] = best_val_metric
 
         # update experiment attributes
-        self.total_training_epochs = epoch + epoch_offset # actual number of training epochs completed
+        self.total_training_epochs = (
+            epoch + epoch_offset
+        )  # actual number of training epochs completed
         self.train_history = train_hist
         self.sinkhorn_lambda_scheduling_params["sink_lambda"] = sink_lambda
-        self.sinkhorn_lambda_scheduling_params["sink_lambda_scheduler_factor"] = sink_lambda_sched_factor
+        self.sinkhorn_lambda_scheduling_params[
+            "sink_lambda_scheduler_factor"
+        ] = sink_lambda_sched_factor
 
         self.save_checkpoint(checkpoint_data, save_full_experiment=True)
 
@@ -937,5 +1157,3 @@ class Experiment(ABC):
 
         self.tsb_logger.flush()
         self.tsb_logger.close()
-
-

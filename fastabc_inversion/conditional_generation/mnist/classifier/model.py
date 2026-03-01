@@ -5,18 +5,20 @@ Adapted by Eliane Maalouf
 import torch
 import torch.nn as nn
 from collections import OrderedDict
-#import torch.utils.model_zoo as model_zoo # commented by Eliane Maalouf
-#from fastabc_inversion.conditional_generation.utee import misc # commented by Eliane Maalouf
-#print = misc.logger.info # commented by Eliane Maalouf
+
+# import torch.utils.model_zoo as model_zoo # commented by Eliane Maalouf
+# from fastabc_inversion.conditional_generation.utee import misc # commented by Eliane Maalouf
+# print = misc.logger.info # commented by Eliane Maalouf
 
 model_urls = {
-    'mnist': 'http://ml.cs.tsinghua.edu.cn/~chenxi/pytorch-models/mnist-b07bb66b.pth'
+    "mnist": "http://ml.cs.tsinghua.edu.cn/~chenxi/pytorch-models/mnist-b07bb66b.pth"
 }
+
 
 class MLP(nn.Module):
     def __init__(self, input_dims, n_hiddens, n_class):
         super(MLP, self).__init__()
-        assert isinstance(input_dims, int), 'Please provide int for input_dims'
+        assert isinstance(input_dims, int), "Please provide int for input_dims"
         self.input_dims = input_dims
         current_dims = input_dims
         layers = OrderedDict()
@@ -26,13 +28,13 @@ class MLP(nn.Module):
         else:
             n_hiddens = list(n_hiddens)
         for i, n_hidden in enumerate(n_hiddens):
-            layers['fc{}'.format(i+1)] = nn.Linear(current_dims, n_hidden)
-            layers['relu{}'.format(i+1)] = nn.ReLU()
-            layers['drop{}'.format(i+1)] = nn.Dropout(0.2)
+            layers["fc{}".format(i + 1)] = nn.Linear(current_dims, n_hidden)
+            layers["relu{}".format(i + 1)] = nn.ReLU()
+            layers["drop{}".format(i + 1)] = nn.Dropout(0.2)
             current_dims = n_hidden
-        layers['out'] = nn.Linear(current_dims, n_class)
+        layers["out"] = nn.Linear(current_dims, n_class)
 
-        self.model= nn.Sequential(layers)
+        self.model = nn.Sequential(layers)
         print(self.model)
 
     def forward(self, input):
@@ -40,7 +42,10 @@ class MLP(nn.Module):
         assert input.size(1) == self.input_dims
         return self.model.forward(input)
 
-def mnist(input_dims=1024, n_hiddens=[256, 256], n_class=10, pretrained=None): # original code input_dims=784
+
+def mnist(
+    input_dims=1024, n_hiddens=[256, 256], n_class=10, pretrained=None
+):  # original code input_dims=784
     model = MLP(input_dims, n_hiddens, n_class)
     """ # original code to load pretrained weights; commented by Eliane Maalouf
     if pretrained is not None:

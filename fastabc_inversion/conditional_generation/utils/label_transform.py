@@ -1,6 +1,7 @@
 import torch
 from skbio.stats.composition import multi_replace, clr, clr_inv
 
+
 class LabelTransform:
     """
     A callable class to perform One-Hot Encoding.
@@ -128,6 +129,7 @@ class LabelTransform:
 
         return labels
 
+
 # Example usage:
 if __name__ == "__main__":
     num_classes = 10
@@ -151,9 +153,3 @@ if __name__ == "__main__":
     # Inverse CLR Transformation to get back the one-hot vector
     recovered_one_hot = label_transform.revert_to_label(clr_transformed, one_hot=True)
     print("Recovered One-Hot:", recovered_one_hot)
-
-
-
-
-
-

@@ -7,15 +7,18 @@ import numpy as np
 from sys import stdout
 from sklearn.metrics import pairwise_kernels, pairwise_distances
 
+
 def MMD2u(K, m, n):
-    """The MMD^2 unbiased statistic.
-    """
+    """The MMD^2 unbiased statistic."""
     Kx = K[:m, :m]
     Ky = K[m:, m:]
     Kxy = K[:m, m:]
-    return 1.0 / (m * (m - 1.0)) * (Kx.sum() - Kx.diagonal().sum()) + \
-        1.0 / (n * (n - 1.0)) * (Ky.sum() - Ky.diagonal().sum()) - \
-        2.0 / (m * n) * Kxy.sum()
+    return (
+        1.0 / (m * (m - 1.0)) * (Kx.sum() - Kx.diagonal().sum())
+        + 1.0 / (n * (n - 1.0)) * (Ky.sum() - Ky.diagonal().sum())
+        - 2.0 / (m * n) * Kxy.sum()
+    )
+
 
 def MMD2b(K, m, n):
     """
@@ -24,11 +27,12 @@ def MMD2b(K, m, n):
     Kx = K[:m, :m]
     Ky = K[m:, m:]
     Kxy = K[:m, m:]
-    return (1.0 / (m * m) * Kx.sum() + \
-            1.0 / (n * n) * Ky.sum() - \
-            2.0 / (m * n) * Kxy.sum())
+    return (
+        1.0 / (m * m) * Kx.sum() + 1.0 / (n * n) * Ky.sum() - 2.0 / (m * n) * Kxy.sum()
+    )
 
-def MMD2(X,Y, kernel_params, unbiased=True):
+
+def MMD2(X, Y, kernel_params, unbiased=True):
     """
     Estimate the MMD^2 statistic between two samples.
     :param X: first sample
@@ -46,13 +50,17 @@ def MMD2(X,Y, kernel_params, unbiased=True):
 
     XY = np.vstack([X, Y])
 
-    if kernel_params.get('metric', 'rbf') == 'rbf':
-        if 'gamma' not in kernel_params:
+    if kernel_params.get("metric", "rbf") == "rbf":
+        if "gamma" not in kernel_params:
             print("kernel: RBF - estimating gamma using median heuristic.")
-            sigma2 = estimate_median_pairwise_dists(XY, sample_ratio=1.0) # does not count 0 distances in median
-            #sigma2 = np.median(pairwise_distances(XY, metric='euclidean')) ** 2 # counts also 0 distances in median
-            kernel_params['gamma'] = 1/sigma2
-            print(f"Estimated median pairwise squared distance: {sigma2}, setting gamma = {kernel_params['gamma']}")
+            sigma2 = estimate_median_pairwise_dists(
+                XY, sample_ratio=1.0
+            )  # does not count 0 distances in median
+            # sigma2 = np.median(pairwise_distances(XY, metric='euclidean')) ** 2 # counts also 0 distances in median
+            kernel_params["gamma"] = 1 / sigma2
+            print(
+                f"Estimated median pairwise squared distance: {sigma2}, setting gamma = {kernel_params['gamma']}"
+            )
         else:
             print(f"kernel: RBF - using provided gamma = {kernel_params['gamma']}")
 
@@ -63,10 +71,18 @@ def MMD2(X,Y, kernel_params, unbiased=True):
         mmd_estimate = MMD2b(K, m, n)
     return mmd_estimate, K, kernel_params
 
-def compute_null_distribution(K, m, n, iterations=10000, verbose=False, unbiased=True,
-                              random_state=None, marker_interval=1000):
-    """Compute the bootstrap null-distribution of MMD2.
-    """
+
+def compute_null_distribution(
+    K,
+    m,
+    n,
+    iterations=10000,
+    verbose=False,
+    unbiased=True,
+    random_state=None,
+    marker_interval=1000,
+):
+    """Compute the bootstrap null-distribution of MMD2."""
     if type(random_state) == type(np.random.RandomState()):
         rng = random_state
     else:
@@ -77,7 +93,7 @@ def compute_null_distribution(K, m, n, iterations=10000, verbose=False, unbiased
         if verbose and (i % marker_interval) == 0:
             print(i),
             stdout.flush()
-        idx = rng.permutation(m+n)
+        idx = rng.permutation(m + n)
         K_i = K[idx, idx[:, None]]
         mmd2_null[i] = MMD2u(K_i, m, n) if unbiased else MMD2b(K_i, m, n)
 
@@ -87,8 +103,9 @@ def compute_null_distribution(K, m, n, iterations=10000, verbose=False, unbiased
     return mmd2_null
 
 
-def compute_null_distribution_given_permutations(K, m, n, permutation, unbiased = True,
-                                                 iterations=None):
+def compute_null_distribution_given_permutations(
+    K, m, n, permutation, unbiased=True, iterations=None
+):
     """Compute the bootstrap null-distribution of MMD2u given
     predefined permutations.
 
@@ -106,8 +123,16 @@ def compute_null_distribution_given_permutations(K, m, n, permutation, unbiased 
     return mmd2_null
 
 
-def kernel_two_sample_test(X, Y, kernel_function='rbf', iterations=10000, unbiased = True,
-                           verbose=False, random_state=None, **kwargs):
+def kernel_two_sample_test(
+    X,
+    Y,
+    kernel_function="rbf",
+    iterations=10000,
+    unbiased=True,
+    verbose=False,
+    random_state=None,
+    **kwargs,
+):
     """Compute MMD^2 (only relevant for unbiased), its null distribution and the p-value of the
     kernel two-sample test.
 
@@ -125,36 +150,60 @@ def kernel_two_sample_test(X, Y, kernel_function='rbf', iterations=10000, unbias
         print(f"MMD^2 = {obs_mmd}")
         print("Computing the null distribution.")
 
-    mmd2_null = compute_null_distribution(K, m, n, iterations,
-                                          verbose=verbose, unbiased= unbiased,
-                                          random_state=random_state)
-    p_value = max(1.0 / iterations, (mmd2_null > obs_mmd).sum() /
-                  float(iterations))
+    mmd2_null = compute_null_distribution(
+        K,
+        m,
+        n,
+        iterations,
+        verbose=verbose,
+        unbiased=unbiased,
+        random_state=random_state,
+    )
+    p_value = max(1.0 / iterations, (mmd2_null > obs_mmd).sum() / float(iterations))
     if verbose:
         print(f"p-value ~= {p_value} \t (resolution : {1.0/iterations})")
 
     return obs_mmd, mmd2_null, p_value, params
 
-def two_sample_mmd_test(X, Y, kernel_params, alpha = 0.05, iterations=10000,
-                        unbiased=True, random_state=None, verbose = False):
+
+def two_sample_mmd_test(
+    X,
+    Y,
+    kernel_params,
+    alpha=0.05,
+    iterations=10000,
+    unbiased=True,
+    random_state=None,
+    verbose=False,
+):
     """Wrapper for kernel_two_sample_test() that takes a standardized kernel_params dictionary and returns the
     test statistic, p-value and H0 rejection decision.
     """
     if verbose:
-        print("\n Performing two sample test based on MMD statistic and permutation test. \n "
-              "H0: The two samples come from the same distribution.")
+        print(
+            "\n Performing two sample test based on MMD statistic and permutation test. \n "
+            "H0: The two samples come from the same distribution."
+        )
 
         # raise warning if unbiased = False
         if not unbiased:
-            print("Warning: Using biased estimator for MMD. This may lead to incorrect results.")
+            print(
+                "Warning: Using biased estimator for MMD. This may lead to incorrect results."
+            )
 
         print(f"Alpha level: {alpha}")
 
-    kernel_function = kernel_params.pop('metric', 'rbf')
-    obs_mmd, mmd2_null, p_value, params = kernel_two_sample_test(X, Y, kernel_function=kernel_function,
-                                                                    iterations=iterations, unbiased=unbiased,
-                                                                    verbose=verbose, random_state=random_state,
-                                                                    **kernel_params)
+    kernel_function = kernel_params.pop("metric", "rbf")
+    obs_mmd, mmd2_null, p_value, params = kernel_two_sample_test(
+        X,
+        Y,
+        kernel_function=kernel_function,
+        iterations=iterations,
+        unbiased=unbiased,
+        verbose=verbose,
+        random_state=random_state,
+        **kernel_params,
+    )
     if verbose:
         print(f"Kernel parameters: {params}")
     return obs_mmd, p_value, p_value < alpha
@@ -280,7 +329,10 @@ def estimate_median_pairwise_dists_2(all_data, sample_ratio=0.1, max_pairs=50000
 
     # Use squared=True for squared Euclidean distance
     from sklearn.metrics.pairwise import euclidean_distances
-    dist_matrix_sq = pairwise_distances(D_subsample, D_subsample, metric='euclidean')**2
+
+    dist_matrix_sq = (
+        pairwise_distances(D_subsample, D_subsample, metric="euclidean") ** 2
+    )
 
     # 3. Flatten and Select
     # Get the upper triangle of the matrix to avoid zeros on the diagonal
@@ -298,24 +350,24 @@ def estimate_median_pairwise_dists_2(all_data, sample_ratio=0.1, max_pairs=50000
         # Handle case where subsample size is too small
         return 1.0
 
-    median_sq = np.median(distances_sq) # Median of squared distances
+    median_sq = np.median(distances_sq)  # Median of squared distances
 
     return median_sq
 
+
 # test functions
-def test_different_distributions(n=100, m=100, dim_x = 10, dim_y = 10, unbiased=True):
+def test_different_distributions(n=100, m=100, dim_x=10, dim_y=10, unbiased=True):
     # Generate samples from different distributions
     np.random.seed(0)
     X = np.random.randn(n, dim_x)  # Standard normal distribution
     Y = np.random.uniform(-2, 2, (m, dim_y))  # Uniform distribution
 
     alpha = 0.05
-    kernel_function = 'rbf'  # gamma will be set using median heuristic
+    kernel_function = "rbf"  # gamma will be set using median heuristic
 
-    mmd2, mmd2_null, p_value, params = kernel_two_sample_test(X, Y,
-                                                        kernel_function=kernel_function,
-                                                        unbiased=unbiased,
-                                                        verbose=True)
+    mmd2, mmd2_null, p_value, params = kernel_two_sample_test(
+        X, Y, kernel_function=kernel_function, unbiased=unbiased, verbose=True
+    )
 
     print("\nTest: Different Distributions (Normal vs. Uniform)")
     print(f"Test Statistic: {mmd2}")
@@ -325,24 +377,23 @@ def test_different_distributions(n=100, m=100, dim_x = 10, dim_y = 10, unbiased=
     else:
         print("Result: Fail to reject the null hypothesis (unexpected).")
 
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     np.random.seed(0)
-
 
     m = 20
     n = 20
     d = 20
 
-    unbiased = True # use biased estimator or not
+    unbiased = True  # use biased estimator or not
 
     sigma2X = np.eye(d)
     muX = np.zeros(d)
 
     sigma2Y = np.eye(d)
-    #muY = np.ones(d)
+    # muY = np.ones(d)
     muY = np.zeros(d)
 
     iterations = 10000
@@ -352,13 +403,14 @@ if __name__ == '__main__':
 
     if d == 2:
         plt.figure()
-        plt.plot(X[:, 0], X[:, 1], 'bo')
-        plt.plot(Y[:, 0], Y[:, 1], 'rx')
-
+        plt.plot(X[:, 0], X[:, 1], "bo")
+        plt.plot(Y[:, 0], Y[:, 1], "rx")
 
     # compare to estimate_median_pairwise_dists
     all_data = np.vstack((X, Y))
-    sigma2 = np.median(pairwise_distances(all_data, metric='euclidean')) ** 2 # counts also 0 distances
+    sigma2 = (
+        np.median(pairwise_distances(all_data, metric="euclidean")) ** 2
+    )  # counts also 0 distances
     # test estimate_median_pairwise_dists
     sigma2_est = estimate_median_pairwise_dists(all_data, sample_ratio=1.0)
     sigma2_est2 = estimate_median_pairwise_dists_2(all_data, sample_ratio=1.0)
@@ -366,25 +418,29 @@ if __name__ == '__main__':
     print(f"Median pairwise squared distance (est): {sigma2_est}")
     print(f"Median pairwise squared distance (est 2): {sigma2_est2}")
 
-
-    mmd2, mmd2_null, p_value, params = kernel_two_sample_test(X, Y,
-                                                       kernel_function='rbf',
-                                                       gamma=1.0/sigma2,
-                                                       unbiased=unbiased,
-                                                       verbose=True)
-    #mmd2u, mmd2u_null, p_value, params = kernel_two_sample_test(X, Y,
+    mmd2, mmd2_null, p_value, params = kernel_two_sample_test(
+        X, Y, kernel_function="rbf", gamma=1.0 / sigma2, unbiased=unbiased, verbose=True
+    )
+    # mmd2u, mmd2u_null, p_value, params = kernel_two_sample_test(X, Y,
     #                                                   kernel_function='linear',
     #                                                   unbiased = unbiased,
     #                                                   verbose=True)
 
     plt.figure()
     prob, bins, patches = plt.hist(mmd2_null, bins=50, density=True)
-    plt.plot(mmd2, prob.max()/30, 'w*', markersize=24, markeredgecolor='k',
-             markeredgewidth=2, label=f"$MMD^2_u = {mmd2}$")
-    plt.xlabel('$MMD^2_u$')
-    plt.ylabel('$p(MMD^2_u)$')
+    plt.plot(
+        mmd2,
+        prob.max() / 30,
+        "w*",
+        markersize=24,
+        markeredgecolor="k",
+        markeredgewidth=2,
+        label=f"$MMD^2_u = {mmd2}$",
+    )
+    plt.xlabel("$MMD^2_u$")
+    plt.ylabel("$p(MMD^2_u)$")
     plt.legend(numpoints=1)
     plt.title(f"$MMD^2_u$: null-distribution and observed value. $p$-value={p_value}")
     plt.show()
 
-    test_different_distributions(n=50, m=50, dim_x = 2000, dim_y = 2000, unbiased=True)
+    test_different_distributions(n=50, m=50, dim_x=2000, dim_y=2000, unbiased=True)

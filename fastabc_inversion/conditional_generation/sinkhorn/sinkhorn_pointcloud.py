@@ -11,6 +11,7 @@ Source : https://github.com/gpeyre/SinkhornAutoDiff/blob/master/sinkhorn_pointcl
 import torch
 from torch.autograd import Variable
 
+
 def sinkhorn_normalized(x, y, epsilon, n, niter, p=2, device=None):
     Wyy = sinkhorn_loss(y, y, epsilon, n, niter, p, device)
     Wxx = sinkhorn_loss(x, x, epsilon, n, niter, p, device)
@@ -19,7 +20,8 @@ def sinkhorn_normalized(x, y, epsilon, n, niter, p=2, device=None):
     # print('Wxy:',Wxy,'Wxx:',Wxx, 'Wyy:', Wyy)
     return 2 * Wxy - Wxx - Wyy
 
-def sinkhorn_loss(x, y, epsilon, n, niter, p=2, device='cpu'):
+
+def sinkhorn_loss(x, y, epsilon, n, niter, p=2, device="cpu"):
     """
     Given two emprical measures with n points each with locations x and y
     outputs an approximation of the OT cost with regularization parameter epsilon
@@ -30,8 +32,12 @@ def sinkhorn_loss(x, y, epsilon, n, niter, p=2, device='cpu'):
     C = cost_matrix(x, y, p)  # Wasserstein cost function
 
     # both marginals are fixed with equal weights
-    mu = Variable(1.0 / n * torch.FloatTensor(n).fill_(1), requires_grad=False).to(device)
-    nu = Variable(1.0 / n * torch.FloatTensor(n).fill_(1), requires_grad=False).to(device)
+    mu = Variable(1.0 / n * torch.FloatTensor(n).fill_(1), requires_grad=False).to(
+        device
+    )
+    nu = Variable(1.0 / n * torch.FloatTensor(n).fill_(1), requires_grad=False).to(
+        device
+    )
 
     # Parameters of the Sinkhorn algorithm.
     rho = 1  # (.5) **2          # unbalanced transport
@@ -75,12 +81,13 @@ def sinkhorn_loss(x, y, epsilon, n, niter, p=2, device='cpu'):
     pi = torch.exp(M(U, V))  # Transport plan pi = diag(a)*K*diag(b)
     cost = torch.sum(pi * C)
 
-    return cost # Sinkhorn cost
+    return cost  # Sinkhorn cost
 
 
 def cost_matrix(x, y, p=2):
     """Returns the matrix of $|x_i-y_j|^p$.
-    Expects x and y in the shape (# of obs in the cloud, dimension of the data space)."""
+    Expects x and y in the shape (# of obs in the cloud, dimension of the data space).
+    """
 
     x_col = x.unsqueeze(1)
 

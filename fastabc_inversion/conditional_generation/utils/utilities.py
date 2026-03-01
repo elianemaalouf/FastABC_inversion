@@ -5,6 +5,7 @@ Utility functions.
 import torch
 from torch import nn
 
+
 def params_init(m, args=("relu", None), verbose=False):
     """
     Function to randomly initialize the weights in the NN based on Xavier initialization.
@@ -23,26 +24,36 @@ def params_init(m, args=("relu", None), verbose=False):
 
     fn_params = args
     _name_map = {
-        'relu': 'relu',
-        'leaky_relu': 'leaky_relu',
-        'prelu': 'leaky_relu',
-        'constrained_prelu': 'leaky_relu',
-        'swish': 'swish',
-        'silu': 'swish',
-        'beta_swish': 'swish',
-        'constrained_beta_swish':'swish',
+        "relu": "relu",
+        "leaky_relu": "leaky_relu",
+        "prelu": "leaky_relu",
+        "constrained_prelu": "leaky_relu",
+        "swish": "swish",
+        "silu": "swish",
+        "beta_swish": "swish",
+        "constrained_beta_swish": "swish",
     }
     name_map = _name_map[fn_params[0]]
-    if name_map in ['relu', 'leaky_relu']:
-        param = 0.25 if _name_map[fn_params[0]] =='leaky_relu' else None
+    if name_map in ["relu", "leaky_relu"]:
+        param = 0.25 if _name_map[fn_params[0]] == "leaky_relu" else None
         gain = torch.nn.init.calculate_gain(name_map, param=param)
-    elif name_map in ['swish']:
+    elif name_map in ["swish"]:
         gain = 1.75
     else:
         raise NotImplementedError("Unknown activation function {}".format(fn_params[0]))
 
-    if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear, nn.ConvTranspose1d,
-                      nn.ConvTranspose2d, nn.ConvTranspose3d)):
+    if isinstance(
+        m,
+        (
+            nn.Conv1d,
+            nn.Conv2d,
+            nn.Conv3d,
+            nn.Linear,
+            nn.ConvTranspose1d,
+            nn.ConvTranspose2d,
+            nn.ConvTranspose3d,
+        ),
+    ):
         if verbose:  # before initialization
             print("Before init")
             print("m.weight:", m.weight)
@@ -51,10 +62,7 @@ def params_init(m, args=("relu", None), verbose=False):
         if fn_params[0] is None:
             torch.nn.init.xavier_uniform_(m.weight)
         else:
-            torch.nn.init.xavier_uniform_(
-                m.weight,
-                gain=gain
-            )
+            torch.nn.init.xavier_uniform_(m.weight, gain=gain)
         if m.bias is not None:
             if fn_params[1] is not None:
                 torch.nn.init.constant_(m.bias, fn_params[1])
@@ -69,7 +77,8 @@ def params_init(m, args=("relu", None), verbose=False):
     if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
         m.reset_parameters()
 
-def toggle_spectral_norm(model, use_spectral_norm, layer_types=None, verbose = False):
+
+def toggle_spectral_norm(model, use_spectral_norm, layer_types=None, verbose=False):
     """
     Toggles spectral normalization on specific layers of the given model. This function
     iterates through the modules of the `model` and applies or ensures that spectral
@@ -91,12 +100,13 @@ def toggle_spectral_norm(model, use_spectral_norm, layer_types=None, verbose = F
         if isinstance(module, layer_types):
             if use_spectral_norm:
                 # Apply spectral normalization if not already applied
-                if not hasattr(module, 'weight_orig'):
+                if not hasattr(module, "weight_orig"):
                     if verbose:
                         print(f"Applying spectral norm to layer: {module}")
                     spectral_norm(module)
 
-def print_spectral_norm_status(model, layer_types =None):
+
+def print_spectral_norm_status(model, layer_types=None):
     """
     Prints the spectral normalization status of all layers in the given model that are instances of specific types
     of PyTorch modules, such as convolutional or linear layers.
@@ -108,8 +118,13 @@ def print_spectral_norm_status(model, layer_types =None):
 
     for name, module in model.named_modules():
         if isinstance(module, layer_types):
-            status = 'Spectral Norm applied' if hasattr(module, 'weight_orig') else 'No Spectral Norm'
+            status = (
+                "Spectral Norm applied"
+                if hasattr(module, "weight_orig")
+                else "No Spectral Norm"
+            )
             print(f"{name}: {status}")
+
 
 def load_experiment_from_file(experiment_checkpoint_file):
     """
@@ -123,6 +138,7 @@ def load_experiment_from_file(experiment_checkpoint_file):
         experiment = pickle.load(f)
     return experiment
 
+
 def norm_fn_selector(type="lpp"):
     """
     Select the function based on the type
@@ -131,16 +147,18 @@ def norm_fn_selector(type="lpp"):
     :return: the function to use
     """
 
-    import fastabc_inversion.utils.torch_distances as td
+    import fastabc_inversion.conditional_generation.utils.torch_distances as td
+
     _map = {
         "mse": td.mse_torch,
         "rmse": td.rmse_torch,
-        "lpp": td.lpp_torch, # lp^p
+        "lpp": td.lpp_torch,  # lp^p
         "lp": td.lp_torch,
         "ce": td.cross_entropy_torch,
     }
 
     return _map[type]
+
 
 def compute_stats(np_array):
     """
@@ -160,6 +178,22 @@ def compute_stats(np_array):
         q025 = np.quantile(np_array, q=0.025, interpolation="nearest")
         q975 = np.quantile(np_array, q=0.975, interpolation="nearest")
 
-        return {"mean": mean, "std": std, "median": median, "q25": q25, "q75": q75, "q025": q025, "q975": q975}
+        return {
+            "mean": mean,
+            "std": std,
+            "median": median,
+            "q25": q25,
+            "q75": q75,
+            "q025": q025,
+            "q975": q975,
+        }
     else:
-        return {"mean": None, "std": None, "median": None, "q25": None, "q75": None, "q025": None, "q975": None}
+        return {
+            "mean": None,
+            "std": None,
+            "median": None,
+            "q25": None,
+            "q75": None,
+            "q025": None,
+            "q975": None,
+        }

@@ -8,15 +8,19 @@ import numpy as np
 from scipy import ndimage
 from skimage import morphology, transform
 
-_SKEL_LEN_MASK = np.array([[0., 0., 0.], [0., 0., 1.], [np.sqrt(2.), 1., np.sqrt(2.)]])
+_SKEL_LEN_MASK = np.array(
+    [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [np.sqrt(2.0), 1.0, np.sqrt(2.0)]]
+)
 
 
-def _process_img_morph(img, threshold=.5, scale=1):
+def _process_img_morph(img, threshold=0.5, scale=1):
     if scale > 1:
-        up_img = transform.pyramid_expand(img, upscale=scale, order=3, channel_axis=None)  # type: np.ndarray
-        img = (255. * up_img).astype(img.dtype)
+        up_img = transform.pyramid_expand(
+            img, upscale=scale, order=3, channel_axis=None
+        )  # type: np.ndarray
+        img = (255.0 * up_img).astype(img.dtype)
     img_min, img_max = img.min(), img.max()
-    bin_img = (img >= img_min + (img_max - img_min) * threshold)
+    bin_img = img >= img_min + (img_max - img_min) * threshold
     skel, dist_map = morphology.medial_axis(bin_img, return_distance=True, rng=42)
     return img, bin_img, skel, dist_map
 
@@ -42,7 +46,7 @@ class ImageMorphology:
         Euclidean distance map from the boundaries in `binary_image`.
     """
 
-    def __init__(self, image, threshold: float = .5, scale: int = 1):
+    def __init__(self, image, threshold: float = 0.5, scale: int = 1):
         """
         Parameters
         ----------
@@ -57,32 +61,40 @@ class ImageMorphology:
         self.image = np.asarray(image)
         self.threshold = threshold
         self.scale = scale
-        self.hires_image, self.binary_image, self.skeleton, self.distance_map = \
-            _process_img_morph(self.image, self.threshold, self.scale)
+        (
+            self.hires_image,
+            self.binary_image,
+            self.skeleton,
+            self.distance_map,
+        ) = _process_img_morph(self.image, self.threshold, self.scale)
 
     @property
     def area(self) -> float:
         """Total area/image mass."""
-        return self.binary_image.sum() / self.scale ** 2
+        return self.binary_image.sum() / self.scale**2
 
     @property
     def stroke_length(self) -> float:
         """Length of the estimated skeleton."""
         skel = self.skeleton.astype(float)
-        conv = ndimage.correlate(skel, _SKEL_LEN_MASK, mode='constant')
-        up_length = np.einsum('ij,ij->', conv, skel)  # type: float
+        conv = ndimage.correlate(skel, _SKEL_LEN_MASK, mode="constant")
+        up_length = np.einsum("ij,ij->", conv, skel)  # type: float
         return up_length / self.scale
 
     @property
     def mean_thickness(self) -> float:
         """Mean thickness along the skeleton."""
-        thickness = 2. * np.mean(self.distance_map[self.skeleton]) / self.scale  # type: float
+        thickness = (
+            2.0 * np.mean(self.distance_map[self.skeleton]) / self.scale
+        )  # type: float
         return thickness
 
     @property
     def median_thickness(self) -> float:
         """Median thickness along the skeleton."""
-        thickness = 2. * np.median(self.distance_map[self.skeleton]) / self.scale  # type: float
+        thickness = (
+            2.0 * np.median(self.distance_map[self.skeleton]) / self.scale
+        )  # type: float
         return thickness
 
     def downscale(self, image) -> np.ndarray:
@@ -100,10 +112,12 @@ class ImageMorphology:
         """
         image = np.asarray(image)
         if self.scale > 1:
-            down_img = transform.pyramid_reduce(image, downscale=self.scale, order=3, channel_axis=None)  # type: np.ndarray
+            down_img = transform.pyramid_reduce(
+                image, downscale=self.scale, order=3, channel_axis=None
+            )  # type: np.ndarray
         else:
             down_img = image
-        return (255. * down_img).astype(np.uint8)
+        return (255.0 * down_img).astype(np.uint8)
 
 
 class ImageMoments:
@@ -135,15 +149,15 @@ class ImageMoments:
         m00 = img.sum()
         m10 = (x * img).sum() / m00
         m01 = (y * img).sum() / m00
-        m20 = (x ** 2 * img).sum() / m00
+        m20 = (x**2 * img).sum() / m00
         m11 = (x * y * img).sum() / m00
-        m02 = (y ** 2 * img).sum() / m00
+        m02 = (y**2 * img).sum() / m00
         self.m00 = m00
         self.m10 = m10
         self.m01 = m01
-        self.u20 = m20 - m10 ** 2
+        self.u20 = m20 - m10**2
         self.u11 = m11 - m10 * m01
-        self.u02 = m02 - m01 ** 2
+        self.u02 = m02 - m01**2
 
     @property
     def centroid(self) -> Tuple[float, float]:
@@ -158,15 +172,15 @@ class ImageMoments:
     @property
     def axis_lengths(self) -> Tuple[float, float]:
         """Lenghts of the image's major and minor axes."""
-        delta = .5 * np.hypot(2. * self.u11, self.u20 - self.u02)
-        eig1 = .5 * (self.u20 + self.u02) + delta
-        eig2 = .5 * (self.u20 + self.u02) - delta
+        delta = 0.5 * np.hypot(2.0 * self.u11, self.u20 - self.u02)
+        eig1 = 0.5 * (self.u20 + self.u02) + delta
+        eig2 = 0.5 * (self.u20 + self.u02) - delta
         return np.sqrt(eig1), np.sqrt(eig2)
 
     @property
     def angle(self) -> float:
         """Orientation of the image's major axis."""
-        return .5 * np.arctan2(2. * self.u11, self.u20 - self.u02)
+        return 0.5 * np.arctan2(2.0 * self.u11, self.u20 - self.u02)
 
     @property
     def horizontal_shear(self) -> float:
@@ -183,7 +197,7 @@ def _horz_cdf(img: np.ndarray, shear: float, x: np.ndarray, y: np.ndarray, y_mid
     locs = np.arange(0, img.shape[1], step=1)
     counts = np.zeros(len(locs))
     for i, t in enumerate(locs):
-        counts[i] = ((x + .5 < t + shear * (y - y_mid)) * img).sum()
+        counts[i] = ((x + 0.5 < t + shear * (y - y_mid)) * img).sum()
     return locs, counts / img.sum()
 
 
@@ -226,8 +240,8 @@ def bounding_parallelogram(img, frac: float, moments: ImageMoments = None):
     vcdf = _vert_cdf(img, y)
 
     frac /= 2  # two-sided
-    left, right = np.interp([frac, 1. - frac], hcdf, hloc)
-    top, bottom = np.interp([frac, 1. - frac], vcdf, np.arange(len(vcdf)))
+    left, right = np.interp([frac, 1.0 - frac], hcdf, hloc)
+    top, bottom = np.interp([frac, 1.0 - frac], vcdf, np.arange(len(vcdf)))
 
     top_left = np.array([left + shear * (top - middle), top])
     top_right = np.array([right + shear * (top - middle), top])
