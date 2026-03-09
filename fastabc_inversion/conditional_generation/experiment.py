@@ -10,16 +10,17 @@ import string
 import time
 from abc import ABC, abstractmethod
 
+import fastabc_inversion.conditional_generation.sinkhorn.sinkhorn_pointcloud as spc
 import numpy as np
 import torch
 import torch.distributions as dists
-from torch.utils.tensorboard import SummaryWriter
-import torchinfo
 import torch.optim as optim
-from torch.optim import lr_scheduler
-import fastabc_inversion.conditional_generation.sinkhorn.sinkhorn_pointcloud as spc
-from fastabc_inversion.conditional_generation.utils.utilities import norm_fn_selector
+import torchinfo
 from fastabc_inversion.conditional_generation.nn.clr_torch import CLR
+from fastabc_inversion.conditional_generation.utils.utilities import \
+    norm_fn_selector
+from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
 
 
 def inspect_data(
@@ -33,9 +34,8 @@ def inspect_data(
     num_batch_to_inspect: number of batches to inspect
     """
     # get data from num_batch_to_inspect batches
-    from fastabc_inversion.conditional_generation.utils.plotting import (
-        plot_samples_inspections,
-    )
+    from fastabc_inversion.conditional_generation.utils.plotting import \
+        plot_samples_inspections
 
     images = []
     labels = []

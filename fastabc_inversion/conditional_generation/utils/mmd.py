@@ -3,9 +3,10 @@ Adapted from https://github.com/emanuele/kernel_two_sample_test/blob/master/kern
 Reference : Gretton, A., Borgwardt, K. M., Rasch, M. J., Schölkopf, B., & Smola, A. (2012). A kernel two-sample test.
 Adapted by Eliane Maalouf.
 """
-import numpy as np
 from sys import stdout
-from sklearn.metrics import pairwise_kernels, pairwise_distances
+
+import numpy as np
+from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 
 def MMD2u(K, m, n):

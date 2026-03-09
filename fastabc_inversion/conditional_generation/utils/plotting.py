@@ -1,8 +1,8 @@
 """
 Common plotting configurations and functions.
 """
-import seaborn as sns
 import numpy as np
+import seaborn as sns
 from matplotlib.ticker import PercentFormatter
 
 
@@ -346,11 +346,10 @@ def plot_samples_inspections(
     # TODO : make independent from torch
 
     import random
+
     import torch
     from fastabc_inversion.conditional_generation.utils.plotting import (
-        plots_imports,
-        base_config,
-    )
+        base_config, plots_imports)
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -428,9 +427,7 @@ def plot_stripplot(
 
     import pandas as pd
     from fastabc_inversion.conditional_generation.utils.plotting import (
-        plots_imports,
-        base_config,
-    )
+        base_config, plots_imports)
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -568,9 +565,7 @@ def plot_boxplot_with_stripplot(
 
     import pandas as pd
     from fastabc_inversion.conditional_generation.utils.plotting import (
-        plots_imports,
-        base_config,
-    )
+        base_config, plots_imports)
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -736,9 +731,7 @@ def plot_horizontal_boxplots_with_total(
     """
     import pandas as pd
     from fastabc_inversion.conditional_generation.utils.plotting import (
-        plots_imports,
-        base_config,
-    )
+        base_config, plots_imports)
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)
@@ -832,9 +825,7 @@ def plot_class_proportions_stacked(
     :param kwargs: Additional keyword arguments for customizing the plot
     """
     from fastabc_inversion.conditional_generation.utils.plotting import (
-        plots_imports,
-        base_config,
-    )
+        base_config, plots_imports)
 
     mpl, plt, make_axes_locatable, tick = plots_imports()
     base_config(mpl, **kwargs)

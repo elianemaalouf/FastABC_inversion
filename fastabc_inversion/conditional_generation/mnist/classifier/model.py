@@ -2,9 +2,10 @@
 Adapted from https://github.com/aaron-xichen/pytorch-playground/blob/master/mnist/model.py
 Adapted by Eliane Maalouf
 """
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
-from collections import OrderedDict
 
 # import torch.utils.model_zoo as model_zoo # commented by Eliane Maalouf
 # from fastabc_inversion.conditional_generation.utee import misc # commented by Eliane Maalouf

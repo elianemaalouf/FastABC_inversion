@@ -8,12 +8,8 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
-
 from fastabc_inversion.conditional_generation.mnist.morphology.morpho import (
-    bounding_parallelogram,
-    ImageMoments,
-    ImageMorphology,
-)
+    ImageMoments, ImageMorphology, bounding_parallelogram)
 
 
 class Morphometrics(NamedTuple):
@@ -278,8 +274,8 @@ def test_slant_on_mnist(num_samples=10):
     num_samples : int
         Number of images to test.
     """
-    from torchvision import datasets, transforms
     import matplotlib.pyplot as plt
+    from torchvision import datasets, transforms
 
     # Load MNIST dataset (32x32 resized)
     transform = transforms.Compose(
@@ -347,8 +343,8 @@ def test_thickness_on_mnist(num_samples=10):
         Number of images to test.
     """
 
-    from torchvision import datasets, transforms
     import matplotlib.pyplot as plt
+    from torchvision import datasets, transforms
 
     # Load MNIST dataset (32x32 resized)
     transform = transforms.Compose(
@@ -555,9 +551,8 @@ if __name__ == "__main__":
             f"2.5th Percentile: {perc_2_5_height:.2f}, 97.5th Percentile: {perc_97_5_height:.2f}"
         )
 
-        from fastabc_inversion.conditional_generation.utils.plotting import (
-            plot_horizontal_boxplots_with_total,
-        )
+        from fastabc_inversion.conditional_generation.utils.plotting import \
+            plot_horizontal_boxplots_with_total
 
         # Prepare data for each metric
         df_slant = df_morpho[["label", "slant"]].rename(

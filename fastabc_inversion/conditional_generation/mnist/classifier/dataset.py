@@ -3,10 +3,11 @@ Adapted from https://github.com/aaron-xichen/pytorch-playground/blob/master/mnis
 Adapted by Eliane Maalouf
 """
 
-from torch.utils.data import DataLoader
-import torch
-from torchvision import datasets, transforms
 import os
+
+import torch
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 
 def get(

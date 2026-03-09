@@ -8,14 +8,13 @@ import argparse
 import os
 import time
 
-from utee import misc
+import dataset
+import model
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-
-import dataset
-import model
+from utee import misc
 
 parser = argparse.ArgumentParser(description="PyTorch MNIST Example")
 parser.add_argument("--wd", type=float, default=0.0001, help="weight decay")

@@ -1,20 +1,17 @@
+import os
+import pickle
+import time
+
+import fastabc_inversion.conditional_generation.utils.torch_distances as torch_dist
 import numpy as np
 import scipy as sp
 import torch
-import time
-import os
-import pickle
-from fastabc_inversion.conditional_generation.SubsetSimulation import ERADist
-from fastabc_inversion.conditional_generation.SubsetSimulation import aCS
-from fastabc_inversion.conditional_generation.SubsetSimulation.corr_factor import (
-    corr_factor,
-)
-import fastabc_inversion.conditional_generation.utils.torch_distances as torch_dist
 from fastabc_inversion.conditional_generation.mnist.morphology.measure import (
-    measure_slant,
-    measure_thickness,
-    measure_length,
-)
+    measure_length, measure_slant, measure_thickness)
+from fastabc_inversion.conditional_generation.SubsetSimulation import (ERADist,
+                                                                       aCS)
+from fastabc_inversion.conditional_generation.SubsetSimulation.corr_factor import \
+    corr_factor
 
 
 def prep_SuS(experiment):

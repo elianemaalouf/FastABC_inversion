@@ -3,8 +3,8 @@
 The neural network model for the joint generative neural network (JGNN).
 """
 
-import torch.nn as nn
 import torch
+import torch.nn as nn
 
 
 class ConstrainedPReLU(nn.PReLU):

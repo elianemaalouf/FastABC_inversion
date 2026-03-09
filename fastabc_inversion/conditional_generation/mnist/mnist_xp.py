@@ -3,26 +3,22 @@ Written by Eliane Maalouf (eliane.maalouf@unine.ch)
 Script to run conditional generation experiments on the MNIST dataset.
 """
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-import torch
-from torch import nn
 import numpy as np
+import torch
+from fastabc_inversion.conditional_generation.experiment import (Experiment,
+                                                                 inspect_data)
+from fastabc_inversion.conditional_generation.utils.label_transform import \
+    LabelTransform
+from fastabc_inversion.conditional_generation.utils.utilities import (
+    load_experiment_from_file, print_spectral_norm_status,
+    toggle_spectral_norm)
+from torch import nn
 from torchvision import transforms
-from fastabc_inversion.conditional_generation.experiment import Experiment, inspect_data
-from fastabc_inversion.conditional_generation.utils.utilities import (
-    toggle_spectral_norm,
-    print_spectral_norm_status,
-)
-from fastabc_inversion.conditional_generation.utils.label_transform import (
-    LabelTransform,
-)
-from fastabc_inversion.conditional_generation.utils.utilities import (
-    load_experiment_from_file,
-)
 
 
 class MNIST_XP(Experiment):
@@ -48,8 +44,8 @@ class MNIST_XP(Experiment):
         """
 
         import torchvision
-        from torch.utils.data import DataLoader, Subset
         from sklearn.model_selection import train_test_split
+        from torch.utils.data import DataLoader, Subset
 
         self.image_transform = transforms.Compose(
             [
@@ -136,9 +132,9 @@ class MNIST_XP(Experiment):
 
     def construct_model_architecture_1(self, model_selector, nn_params):
         print(f"Constructing jGNN model architecture, based on old model...")
-        from fastabc_inversion.conditional_generation.utils.utilities import params_init
-
         import fastabc_inversion.conditional_generation.nn.nnmodels_WAE as nnm
+        from fastabc_inversion.conditional_generation.utils.utilities import \
+            params_init
 
         self.nn_params = nn_params
         self.model_selector = model_selector
@@ -190,9 +186,9 @@ class MNIST_XP(Experiment):
         """ """
         print(f"Constructing jGNN model architecture...")
 
-        from fastabc_inversion.conditional_generation.utils.utilities import params_init
-
         import fastabc_inversion.conditional_generation.nn.jgnn as nnm
+        from fastabc_inversion.conditional_generation.utils.utilities import \
+            params_init
 
         self.latent_dim = nn_params.get("latent_dim", None)
         if self.latent_dim is None:
@@ -516,9 +512,8 @@ if __name__ == "__main__":
     if run_jsae_diags:
         # if not training, run diagnostics on a pre-trained model
         import fastabc_inversion.conditional_generation.diagnostics as diag
-        from fastabc_inversion.conditional_generation.mnist.classifier.model import (
-            mnist,
-        )
+        from fastabc_inversion.conditional_generation.mnist.classifier.model import \
+            mnist
 
         print("Running diagnostics on pre-trained model...")
 
@@ -591,9 +586,8 @@ if __name__ == "__main__":
             # classify samples and plot distributions of predicted labels at each intermediate threshold
             # load pretrained classifier (example: MNIST classifier)
             import fastabc_inversion.conditional_generation.diagnostics as diag
-            from fastabc_inversion.conditional_generation.mnist.classifier.model import (
-                mnist,
-            )
+            from fastabc_inversion.conditional_generation.mnist.classifier.model import \
+                mnist
 
             classifier = mnist(pretrained="./classifier/PretrainedClassifier.pth").to(
                 mnist_exp.device

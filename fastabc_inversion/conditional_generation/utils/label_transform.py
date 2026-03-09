@@ -1,5 +1,5 @@
 import torch
-from skbio.stats.composition import multi_replace, clr, clr_inv
+from skbio.stats.composition import clr, clr_inv, multi_replace
 
 
 class LabelTransform:

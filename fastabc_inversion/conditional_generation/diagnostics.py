@@ -2,19 +2,20 @@
 Written by Eliane Maalouf (eliane.maalouf@unine.ch)
 Base class for diagnostics on the trained models and SuS inference for conditional generation experiments.
 """
-from torch.utils.data import Subset, DataLoader
-import torch
 import os
-import pingouin as pg
-import numpy as np
 
-from fastabc_inversion.conditional_generation.utils.utilities import compute_stats
-from fastabc_inversion.conditional_generation.utils.mmd import (
-    MMD2 as mmd,
-    two_sample_mmd_test,
-)
-from fastabc_inversion.conditional_generation.utils.torch_distances import rmse_torch
 import fastabc_inversion.conditional_generation.utils.plotting as plot
+import numpy as np
+import pingouin as pg
+import torch
+from fastabc_inversion.conditional_generation.utils.mmd import MMD2 as mmd
+from fastabc_inversion.conditional_generation.utils.mmd import \
+    two_sample_mmd_test
+from fastabc_inversion.conditional_generation.utils.torch_distances import \
+    rmse_torch
+from fastabc_inversion.conditional_generation.utils.utilities import \
+    compute_stats
+from torch.utils.data import DataLoader, Subset
 
 
 def compare_labels(target, predicted):
@@ -496,9 +497,8 @@ class Diagnostics:
         :param data: data to use for estimation.
         :return: estimated MMD kernel parameter gamma.
         """
-        from fastabc_inversion.conditional_generation.utils.mmd import (
-            estimate_median_pairwise_dists,
-        )
+        from fastabc_inversion.conditional_generation.utils.mmd import \
+            estimate_median_pairwise_dists
 
         sq_median = estimate_median_pairwise_dists(
             data, sample_ratio=1.0, chunk_size=300
@@ -515,9 +515,8 @@ class Diagnostics:
             "Estimating median squared euclidean distance for MMD kernel parameter..."
         )
 
-        from fastabc_inversion.conditional_generation.utils.mmd import (
-            estimate_median_pairwise_dists,
-        )
+        from fastabc_inversion.conditional_generation.utils.mmd import \
+            estimate_median_pairwise_dists
 
         if which_variable not in ["x", "y", "z"]:
             raise ValueError("which_variable must be one of 'x', 'y', 'z'.")
@@ -801,7 +800,8 @@ class Diagnostics:
         precision = self.round_digits
 
         import copy
-        from torch.utils.data import Subset, DataLoader
+
+        from torch.utils.data import DataLoader, Subset
 
         mmd_params_x = copy.deepcopy(mmd_params)
         two_sample_test_params_x = copy.deepcopy(two_sample_test_params)
@@ -3487,10 +3487,8 @@ class Diagnostics:
         """
         print("Assessing class proportions in training and generated data...")
 
-        from fastabc_inversion.conditional_generation.utils.plotting import (
-            plot_samples_inspections,
-        )
-
+        from fastabc_inversion.conditional_generation.utils.plotting import \
+            plot_samples_inspections
         from scipy.stats import chisquare
 
         # run through the whole training set self.experiment.train_loader to get class counts
@@ -3627,9 +3625,8 @@ class Diagnostics:
 
         print("Assessing Frechet distances between training and generated data...")
 
-        from fastabc_inversion.conditional_generation.utils.frechet_pca_distance import (
-            compute_fpd_pca,
-        )
+        from fastabc_inversion.conditional_generation.utils.frechet_pca_distance import \
+            compute_fpd_pca
 
         precision = self.round_digits
 
