@@ -13,6 +13,7 @@ The geophysical data generation code is available in the `fastabc_inversion/geo_
 - `fastabc_inversion/`: Python package containing the code to run the FastABC inversion experiments. 
 We separate all codes pertaining to geophysical experiments in the `fastabc_inversion/geo_problems/` subpackage 
 and all files pertaining to the conditional image generation problem in the `fastabc_inversion/conditional_generation/` subpackage.
+
 Main files: 
   - `fastabc_inversion/conditional_generation/mnist/mnist.py`: main script to run the FastABC inversion experiments for 
   the conditional image generation problem with MNIST data. 
