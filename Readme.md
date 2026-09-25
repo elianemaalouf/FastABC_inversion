@@ -1,6 +1,6 @@
 # FastABC methodology for solving inverse problems 
 
-Data and Python code repository to reproduce the results in chapters 4 and 5 of the thesis 
+Data and Python code repository to reproduce the results in chapters 4 and 5 of the [thesis]([)](https://github.com/elianemaalouf/phd-thesis) 
 "Contributions to data-driven Bayesian solutions to inverse problems: from classical multivariate statistics to modern
 generative neural networks" by Eliane Maalouf (University of Neuchâtel, Switzerland).
 
